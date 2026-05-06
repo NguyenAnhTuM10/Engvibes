@@ -1,3 +1,4 @@
+
 # Gradle
 .gradle/
 build/
@@ -34,7 +35,12 @@ desktop.ini
 
 # Logs
 *.log
+*.err
+*.out
 logs/
+
+# Scratch files
+bug
 
 # Test / Coverage
 coverage/
