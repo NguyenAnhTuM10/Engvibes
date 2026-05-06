@@ -1,0 +1,35 @@
+Lỗi xảy ra vì PostgreSQL native Windows đang chiếm port 5432 trước  
+ Docker. Có 3 cách tránh:
+
+---
+
+Cách 1 (đang dùng): Đổi Docker port sang 5433
+
+# docker-compose.yml
+
+ports:  
+ - "5433:5432" # host:container  
+ Pros: không ảnh hưởng các project khác dùng Postgres native.  
+ Cons: phải nhớ dùng port 5433 trong connection string.
+
+---
+
+Cách 2: Dừng Windows PostgreSQL service (nếu không cần)  
+ Stop-Service postgresql* # dừng tạm
+Set-Service postgresql* -StartupType Disabled # tắt khởi động cùng
+Windows
+Pros: dùng port 5432 bình thường.
+Cons: mất Postgres Windows nếu có project khác đang dùng.
+
+---
+
+Cách 3: Kiểm tra port trước khi setup (proactive)
+netstat -ano | findstr ":5432 "
+
+# Nếu có kết quả → đổi port Docker
+
+---
+
+Recommendation cho project này: Cách 1 là tốt nhất — giữ 5433:5432 trong
+docker-compose.yml. Để tránh bị quên, tôi sẽ cập nhật application.yml
+default và Troubleshooting trong README.

@@ -1,0 +1,52 @@
+# Gradle
+.gradle/
+build/
+out/
+*.jar
+*.war
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+*.suo
+*.user
+
+# Node
+node_modules/
+dist/
+.pnp
+.pnp.js
+
+# Env
+.env
+.env.local
+.env.*.local
+application-local.yml
+application-local*.yml
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+logs/
+
+# Test / Coverage
+coverage/
+.nyc_output/
+htmlcov/
+
+# Spring Boot
+target/
+
+# AI working docs
+BACKEND_PROMPTS.md
+FRONTEND_PROMPTS.md
+DEPLOY_PROMPTS.md
+DEPLOY_FREE_PROMPTS.md
+SETUP_PROMPTS.md
