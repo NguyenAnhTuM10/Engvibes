@@ -24,8 +24,8 @@ Warmup → Listen → Phrase Practice → Shadow (Whisper) → **Retell (AI coac
 | P-SETUP-1 | Monorepo, .gitignore, .env.example, docker-compose.yml | ✅ Done |
 | P-SETUP-2 | Spring Boot skeleton, application.yml, Flyway V1, HealthController | ✅ Done |
 | P-SETUP-3 | React 18 + Vite 5 + Tailwind + path alias + HomePage | ✅ Done |
-| P-SETUP-4 | Verify FE↔BE↔DB (demo module) | ⏳ Pending |
-| P-SETUP-5 | Cleanup demo + GitHub Actions CI | ⏳ Pending |
+| P-SETUP-4 | Verify FE↔BE↔DB (demo module) | ✅ Done |
+| P-SETUP-5 | Cleanup demo + GitHub Actions CI | ✅ Done |
 | P-BE1 | User + JWT Auth | ⏳ Pending |
 
 **Files đã tạo (backend):**

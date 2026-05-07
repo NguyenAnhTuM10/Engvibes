@@ -1,5 +1,4 @@
 import { useQuery } from '@tanstack/react-query'
-import { Link } from 'react-router-dom'
 import apiClient from '@/shared/api/client'
 
 interface HealthData {
@@ -35,11 +34,6 @@ export default function HomePage() {
           )}
         </div>
 
-        <div className="mt-4">
-          <Link to="/demo" className="text-sm text-blue-600 hover:underline">
-            → Go to Demo page (FE↔BE↔DB test)
-          </Link>
-        </div>
       </div>
     </div>
   )

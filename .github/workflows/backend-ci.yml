@@ -1,0 +1,32 @@
+name: Backend Build
+on:
+  push:
+    branches: [main]
+    paths: ['backend/**']
+  pull_request:
+    branches: [main]
+    paths: ['backend/**']
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: temurin
+          cache: gradle
+      - name: Build skip tests
+        working-directory: ./backend
+        env:
+          DATABASE_URL: jdbc:postgresql://localhost:5432/dummy
+          DATABASE_USER: dummy
+          DATABASE_PASSWORD: dummy
+          REDIS_URL: redis://localhost:6379
+          JWT_SECRET: ci-secret-32chars-minimum-needed-here
+          OPENAI_API_KEY: dummy
+          S3_ENDPOINT: http://localhost:9000
+          S3_ACCESS_KEY: dummy
+          S3_SECRET_KEY: dummy
+          CORS_ALLOWED_ORIGINS: http://localhost:5173
+        run: ./gradlew build -x test
