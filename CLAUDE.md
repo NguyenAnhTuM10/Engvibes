@@ -30,7 +30,7 @@ Warmup → Listen → Phrase Practice → Shadow (Whisper) → **Retell (AI coac
 | P-BE2-1 | Video entity + Admin upload to MinIO + presigned URL | ✅ Done |
 | P-BE2-2 | FFmpeg integration — extract audio (16kHz mono) + thumbnail + duration | ✅ Done |
 | P-BE2-3 | Whisper client + SubtitleSegment — chờ OPENAI_API_KEY để test thật | ✅ Done (code) |
-| P-BE2-4 | Async pipeline + status tracking | ⏳ TODO |
+| P-BE2-4 | Async pipeline + status tracking | ✅ Done |
 | P-BE2-5 | NLP enrichment + LLM collocations | ⏳ TODO |
 | P-BE2-6 | LLM video summary + key points + speaking question | ⏳ TODO |
 | P-BE3+ | Learning Session, Shadow, Retell, Speak, Recommend | ⏳ TODO |
@@ -48,6 +48,7 @@ Warmup → Listen → Phrase Practice → Shadow (Whisper) → **Retell (AI coac
 - `video/`: `Video`, `VideoStatus`, `VideoRepository`, `VideoService`, `FfmpegService`, `AdminVideoController`, `VideoController`
 - `video/dto/`: `CreateVideoRequest`, `UpdateVideoRequest`, `VideoResponse`, `VideoFilter`
 - `video/subtitle/`: `SubtitleSegment`, `SubtitleRepository`, `SubtitleService`
+- `pipeline/`: `VideoProcessingPipeline` (`@Async("videoProcessingExecutor")`, `NOT_SUPPORTED`, PROCESSING→PUBLISHED flow)
 - `ai/`: `WhisperClient`, `WhisperResult`
 - `db/migration/`: V1–V7 (`V7__create_subtitles.sql`)
 - `seed/oxford_5000.csv` — ~300 từ mẫu pipe-separated `word|cefr_level|pos|ipa|phonemes|definition`
@@ -228,16 +229,16 @@ VITE_WS_URL=ws://localhost:8080/ws
 ## Phiên tiếp theo — TODO & Context cần biết
 
 ### Việc cần làm ngay (theo thứ tự)
-1. **P-BE2-4: Async pipeline** — wrap `VideoService.processVideo` thành `@Async`, trả 202 ngay, poll status qua `GET /api/admin/videos/{id}/status`
-2. **P-BE2-5: NLP enrichment** — extract vocab từ subtitles, chọn warmup words, LLM collocation extraction
-3. **P-BE2-6: LLM summary** — generate video summary + key_points + speaking question, cache Redis
-4. **Khi có OPENAI_API_KEY**: set vào `application-local.yml` rồi test lại `POST /api/admin/videos/{id}/process` với video thật tiếng Anh → verify `subtitle_segments` table có data
+1. **P-BE2-5: NLP enrichment** — extract vocab từ subtitles, chọn warmup words, LLM collocation extraction
+2. **P-BE2-6: LLM summary** — generate video summary + key_points + speaking question, cache Redis
+3. **Khi có OPENAI_API_KEY**: set vào `application-local.yml` rồi test lại `POST /api/admin/videos/{id}/process` với video thật tiếng Anh → verify `subtitle_segments` table có data, status chuyển PUBLISHED
 
 ### State hiện tại của pipeline (quan trọng)
-- `POST /api/admin/videos/{id}/process` hiện chạy **đồng bộ** (blocking), trả 200 sau khi xong
-- Video upload flow: `MultipartFile → temp file → MinIO (source.mp4) → FFmpeg → MinIO (audio.mp3 + thumbnail.jpg) → DB`
-- Whisper call: `audio.mp3 từ MinIO → WhisperClient → group words → subtitle_segments table`
-- **Chưa có**: NLP enrichment, LLM calls, async, WebSocket notifications
+- `POST /api/admin/videos/{id}/process` trả **202 ngay**, pipeline chạy background trên `videoProcessingExecutor` (2-4 threads)
+- Pipeline flow: `PROCESSING → download audio.mp3 → WhisperClient → subtitle_segments → PUBLISHED (hoặc FAILED)`
+- Poll status: `GET /api/admin/videos/{id}/status` → `{id, status, errorMessage}`
+- Video upload flow: `MultipartFile → temp file → MinIO (source.mp4) → FFmpeg → MinIO (audio.mp3 + thumbnail.jpg) → DB (DRAFT)`
+- **Chưa có**: NLP enrichment, LLM calls, WebSocket notifications
 
 ### Bug quan trọng đã gặp — cần nhớ cho phases sau
 **Transaction + External Service pattern:**
