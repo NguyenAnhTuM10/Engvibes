@@ -62,18 +62,18 @@ public class Video {
     @Column(columnDefinition = "TEXT")
     private String errorMessage;
 
-    @Column(columnDefinition = "TEXT")
+    @Column(name = "warmup_words", columnDefinition = "TEXT")
     @Builder.Default
     private String warmupWordsJson = "[]";
 
-    @Column(columnDefinition = "TEXT")
+    @Column(name = "collocations", columnDefinition = "TEXT")
     @Builder.Default
     private String collocationsJson = "{}";
 
     @Column(columnDefinition = "TEXT")
     private String summary;
 
-    @Column(columnDefinition = "TEXT")
+    @Column(name = "key_points", columnDefinition = "TEXT")
     @Builder.Default
     private String keyPointsJson = "[]";
 
