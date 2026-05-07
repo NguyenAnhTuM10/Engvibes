@@ -68,6 +68,11 @@ public class S3StorageService implements StorageService {
     }
 
     @Override
+    public byte[] download(String bucket, String key) {
+        return s3Client.getObjectAsBytes(r -> r.bucket(bucket).key(key)).asByteArray();
+    }
+
+    @Override
     public void delete(String bucket, String key) {
         s3Client.deleteObject(r -> r.bucket(bucket).key(key));
         log.debug("Deleted {}/{}", bucket, key);

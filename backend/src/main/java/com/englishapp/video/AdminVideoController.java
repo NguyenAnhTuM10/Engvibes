@@ -55,4 +55,9 @@ public class AdminVideoController {
     public void deleteVideo(@PathVariable UUID id) {
         videoService.deleteVideo(id);
     }
+
+    @PostMapping("/{id}/process")
+    public ApiResponse<VideoResponse> processVideo(@PathVariable UUID id) {
+        return ApiResponse.ok(videoService.processVideo(id), "Processing triggered");
+    }
 }
