@@ -33,7 +33,9 @@ Warmup → Listen → Phrase Practice → Shadow (Whisper) → **Retell (AI coac
 | P-BE2-4 | Async pipeline + status tracking | ✅ Done |
 | P-BE2-5 | NLP enrichment + LLM collocations | ✅ Done |
 | P-BE2-6 | LLM video summary + key points + speaking question | ✅ Done |
-| P-BE3+ | Learning Session, Shadow, Retell, Speak, Recommend | ⏳ TODO |
+| P-BE3-1 | LearningSession state machine (7 steps, XP, streak) | ✅ Done |
+| P-BE3-2 | Warmup + Listen APIs | ✅ Done |
+| P-BE4+ | Phrase Practice, Shadow, Retell, Speak, Recommend | ⏳ TODO |
 
 **Files đã tạo (backend):**
 - `EnglishAppApplication.java`
@@ -51,7 +53,9 @@ Warmup → Listen → Phrase Practice → Shadow (Whisper) → **Retell (AI coac
 - `pipeline/`: `VideoProcessingPipeline` (`@Async("videoProcessingExecutor")`, `NOT_SUPPORTED`, PROCESSING→PUBLISHED flow incl. enrichment)
 - `ai/`: `WhisperClient`, `WhisperResult`, `LlmClient`, `NlpService`, `AIOrchestrationService`
 - `ai/dto/`: `WarmupWord`, `VideoEnrichment`, `VideoSummary`
-- `db/migration/`: V1–V8 (`V8__add_video_enrichment.sql` — thêm 5 cột TEXT vào videos)
+- `db/migration/`: V1–V9 (`V8__add_video_enrichment.sql` — thêm 5 cột TEXT vào videos; `V9__create_sessions.sql` — learning_sessions table)
+- `session/`: `LearningSession`, `SessionStatus`, `SessionRepository`, `SessionService`, `SessionController`, `WarmupController`, `ListenController`
+- `session/dto/`: `CreateSessionRequest`, `SessionResponse`, `AdvanceStepRequest`, `SetScaffoldRequest`, `WarmupWordResponse`, `MarkWarmupRequest`, `AddVocabRequest`
 - `seed/oxford_5000.csv` — ~300 từ mẫu pipe-separated `word|cefr_level|pos|ipa|phonemes|definition`
 
 **Files đã tạo (frontend):**
@@ -233,8 +237,9 @@ VITE_WS_URL=ws://localhost:8080/ws
 ## Phiên tiếp theo — TODO & Context cần biết
 
 ### Việc cần làm ngay (theo thứ tự)
-1. **P-BE3: Learning Session** — state machine 7 bước (Warmup → Listen → Phrase → Shadow → Retell → Speak → Review)
-2. **Khi có OPENAI_API_KEY**: set vào `application-local.yml` → test `POST /api/admin/videos/{id}/process` với video thật → verify subtitles + enrichment (warmup_words, collocations, summary)
+1. **P-BE4: Phrase Practice + Shadowing** — Phrase attempts (Whisper compare), Shadow + CMU phoneme detection
+2. **Khi có OPENAI_API_KEY**: set vào `application-local.yml` → test pipeline thật
+
 
 ### State hiện tại của pipeline (quan trọng)
 - `POST /api/admin/videos/{id}/process` trả **202 ngay**, pipeline chạy background trên `videoProcessingExecutor` (2-4 threads)
@@ -281,6 +286,17 @@ public Result processWithExternalService(UUID id) {
 | POST | `/api/admin/videos/{id}/process` | ADMIN | Trigger full pipeline (Whisper + NLP + LLM) |
 | GET | `/api/admin/videos/{id}/subtitles` | ADMIN | Subtitle segments với word timings |
 | GET | `/api/videos/{id}/subtitles` | JWT | Subtitle segments (PUBLISHED only) |
+| POST | `/api/sessions` | JWT | Get or create session (idempotent by user×video) |
+| GET | `/api/sessions/{id}` | JWT | Session detail |
+| PATCH | `/api/sessions/{id}/step` | JWT | Advance step (complete/skip) |
+| PATCH | `/api/sessions/{id}/scaffold` | JWT | Set scaffold level (1-4) |
+| POST | `/api/sessions/{id}/finish` | JWT | Finish session, update XP + streak |
+| GET | `/api/sessions/history` | JWT | Session history |
+| GET | `/api/sessions/{id}/warmup` | JWT | Warmup words with vocabId |
+| POST | `/api/sessions/{id}/warmup/mark` | JWT | Mark word known/new (add to deck) |
+| GET | `/api/sessions/{id}/listen/subtitles` | JWT | Subtitle segments for listen step |
+| POST | `/api/sessions/{id}/listen/add-vocab` | JWT | Add vocab from listen to deck |
+| GET | `/api/sessions/{id}/listen/vocab-info?word=` | JWT | Lookup word in vocab_entries |
 
 ### VideoResponse enrichment fields (có sau khi PUBLISHED)
 ```json
