@@ -26,15 +26,20 @@ public class WhisperClient {
     }
 
     public WhisperResult transcribe(byte[] audioBytes, String filename) {
-        log.info("Sending {}KB audio to Whisper", audioBytes.length / 1024);
+        return transcribe(audioBytes, filename, "audio/mpeg");
+    }
+
+    public WhisperResult transcribe(byte[] audioBytes, String filename, String contentType) {
+        log.info("Sending {}KB audio to Whisper ({})", audioBytes.length / 1024, contentType);
 
         ByteArrayResource audioResource = new ByteArrayResource(audioBytes) {
             @Override
             public String getFilename() { return filename; }
         };
 
+        String mediaType = contentType != null && !contentType.isBlank() ? contentType : "audio/mpeg";
         MultipartBodyBuilder builder = new MultipartBodyBuilder();
-        builder.part("file", audioResource).contentType(MediaType.parseMediaType("audio/mpeg"));
+        builder.part("file", audioResource).contentType(MediaType.parseMediaType(mediaType));
         builder.part("model", "whisper-1");
         builder.part("response_format", "verbose_json");
         builder.part("timestamp_granularities[]", "word");

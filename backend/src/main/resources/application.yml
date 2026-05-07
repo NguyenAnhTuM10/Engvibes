@@ -58,6 +58,7 @@ app:
     secret-key: ${S3_SECRET_KEY:minioadmin}
     bucket-videos: ${S3_BUCKET_VIDEOS:videos}
     bucket-audios: ${S3_BUCKET_AUDIOS:audios}
+    bucket-recordings: ${S3_BUCKET_RECORDINGS:recordings}
     public-url: ${S3_PUBLIC_URL:http://localhost:9000}
     region: ${S3_REGION:us-east-1}
     path-style-access: ${S3_PATH_STYLE:true}
