@@ -252,6 +252,20 @@ VITE_WS_URL=ws://localhost:8080/ws
 2. **Frontend** — Bắt đầu xây UI: Auth, Video list, Learning session flow (7 bước)
 3. **Khi có OPENAI_API_KEY**: set vào `application-local.yml` → test pipeline thật với video tiếng Anh thật
 
+### Trạng thái test BE5 (quan trọng)
+Các endpoint **đã test** (không cần API key):
+- `GET /retell/start` L1-L4 — scaffold structure đúng ✓
+- `GET /speak/question` — trả question + vocab + collocations ✓
+- `GET /quick-review` — empty + sau khi add card ✓
+
+Các endpoint **CHƯA test thật** (cần OPENAI_API_KEY + audio file):
+- `POST /retell/attempt` — Whisper transcribe → LLM eval → parse `RetellFeedback` JSON
+- `POST /speak/attempt` — tương tự, parse `SpeakFeedback` JSON
+- Rate limiting Redis (10/day retell, 50/day speak) — chưa có attempt thật nên chưa verify
+- `extractJson()` trong SpeakController và RetellService — xử lý LLM trả markdown code block
+
+Tương tự BE2 pipeline: code đúng về logic nhưng integration thật chỉ verify được khi có API key.
+
 
 ### State hiện tại của pipeline (quan trọng)
 - `POST /api/admin/videos/{id}/process` trả **202 ngay**, pipeline chạy background trên `videoProcessingExecutor` (2-4 threads)
