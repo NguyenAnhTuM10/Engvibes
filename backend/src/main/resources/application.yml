@@ -2,7 +2,7 @@ spring:
   application:
     name: englishapp-backend
   datasource:
-    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/englishapp}
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5433/englishapp}
     username: ${DATABASE_USER:englishapp}
     password: ${DATABASE_PASSWORD:secret}
     hikari:
