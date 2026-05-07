@@ -26,14 +26,17 @@ Warmup → Listen → Phrase Practice → Shadow (Whisper) → **Retell (AI coac
 | P-SETUP-3 | React 18 + Vite 5 + Tailwind + path alias + HomePage | ✅ Done |
 | P-SETUP-4 | Verify FE↔BE↔DB (demo module) | ✅ Done |
 | P-SETUP-5 | Cleanup demo + GitHub Actions CI | ✅ Done |
-| P-BE1 | User + JWT Auth | ⏳ Pending |
+| P-BE1 | User + JWT Auth | ✅ Done |
 
 **Files đã tạo (backend):**
 - `EnglishAppApplication.java`
 - `common/`: `ApiResponse<T>`, `ApiException`, `GlobalExceptionHandler`, `HealthController`
-- `config/`: `SecurityConfig` (permit all tạm), `CorsConfig`, `RedisConfig`, `AsyncConfig`, `WebSocketConfig`, `OpenApiConfig`
+- `config/`: `SecurityConfig` (JWT filter chain), `CorsConfig`, `RedisConfig`, `AsyncConfig`, `WebSocketConfig`, `OpenApiConfig`, `AppConfig` (PasswordEncoder)
+- `security/`: `JwtService`, `JwtAuthenticationFilter`
+- `user/`: `User`, `CEFRLevel`, `Role`, `UserRepository`, `UserService`, `UserMapper`, `AuthController`, `UserController`
+- `user/dto/`: `RegisterRequest`, `LoginRequest`, `AuthResponse`, `UserResponse`, `UpdateUserRequest`
 - `src/main/resources/application.yml` + `application-local.yml` (gitignored)
-- `db/migration/V1__init.sql`
+- `db/migration/V1__init.sql`, `V2__cleanup.sql`, `V3__create_users.sql`
 
 **Files đã tạo (frontend):**
 - `src/app/`: `App.tsx`, `providers.tsx` (QueryClient + Router), `router.tsx`
@@ -119,10 +122,10 @@ D:\AAA\Engvibes\
 ### Backend package-by-feature
 ```
 com.englishapp/
-├── config/     CorsConfig, RedisConfig, WebSocketConfig, OpenApiConfig, AsyncConfig
-├── security/   JWT filter, SecurityConfig, JwtService  ← chưa implement
+├── config/     CorsConfig, RedisConfig, WebSocketConfig, OpenApiConfig, AsyncConfig, AppConfig
+├── security/   JwtService, JwtAuthenticationFilter
 ├── common/     ApiResponse<T>, ApiException, GlobalExceptionHandler, HealthController
-├── user/       User entity + auth flow  ← chưa implement
+├── user/       User, UserRepository, UserService, AuthController, UserController, UserMapper
 ├── video/      Video, SubtitleSegment, VideoVocab, VideoSummary
 ├── pipeline/   Spring Batch — video processing jobs
 ├── session/    LearningSession state machine (7 steps)
@@ -212,6 +215,11 @@ tasklist /FI "PID eq <pid>"   # nếu thấy postgres.exe → bị conflict
 **Root cause:** Vite 8+ dùng rolldown (Rust native binary) — không load được trên một số Windows.  
 **Fix đã áp dụng:** Downgrade: `npm install -D vite@^5 @vitejs/plugin-react@^4 --legacy-peer-deps`  
 **Lưu ý:** Sau `npm create vite@latest`, luôn check version — nếu v8+ thì downgrade ngay.
+
+### BUG-4: Flyway checksum mismatch sau khi sửa migration đã apply
+**Triệu chứng:** `Migration checksum mismatch for migration version N`  
+**Root cause:** File `VN__.sql` bị sửa sau khi đã apply vào DB.  
+**Fix:** `docker compose down -v && docker compose up -d` (reset DB). Chạy từng lệnh riêng trong PowerShell — `&&` không hợp lệ trong PS 5.1.
 
 ### BUG-3: TypeScript `baseUrl` deprecated (TS 6+)
 **Triệu chứng:** `tsc -b` lỗi `Option 'baseUrl' is deprecated`.  
