@@ -323,6 +323,14 @@ docker exec englishapp-postgres psql -U englishapp -d englishapp \
 
 ## Known Bugs & Workarounds (Windows)
 
+### BUG-6: Hibernate field name ≠ DB column name khi dùng suffix `Json`
+**Triệu chứng:** `Schema-validation: missing column [collocations_json] in table [videos]` khi boot.  
+**Root cause:** Hibernate tự map camelCase → snake_case: `collocationsJson` → `collocations_json`, nhưng migration tạo cột tên `collocations`.  
+**Fix đã áp dụng:** Thêm `@Column(name = "collocations")` rõ ràng trên field.  
+**Pattern cần nhớ:** Bất kỳ field Java nào có tên khác với DB column name phải dùng `@Column(name = "...")`. Đặc biệt khi field suffix `Json` (Java) ↔ tên ngắn trong DB.
+
+
+
 ### BUG-1: PostgreSQL port 5432 conflict với Windows native service
 **Triệu chứng:** `FATAL: password authentication failed` dù password đúng, kể cả pg_hba.conf dùng `trust`.  
 **Root cause:** `postgres.exe` native Windows chiếm port 5432 — Spring Boot kết nối nhầm vào đó.  
