@@ -26,7 +26,7 @@ Warmup → Listen → Phrase Practice → Shadow (Whisper) → **Retell (AI coac
 | P-SETUP-3 | React 18 + Vite 5 + Tailwind + path alias + HomePage | ✅ Done |
 | P-SETUP-4 | Verify FE↔BE↔DB (demo module) | ✅ Done |
 | P-SETUP-5 | Cleanup demo + GitHub Actions CI | ✅ Done |
-| P-BE1 | User + JWT Auth | ✅ Done |
+| P-BE1 | User + JWT Auth + Vocab seed | ✅ Done |
 
 **Files đã tạo (backend):**
 - `EnglishAppApplication.java`
@@ -36,7 +36,8 @@ Warmup → Listen → Phrase Practice → Shadow (Whisper) → **Retell (AI coac
 - `user/`: `User`, `CEFRLevel`, `Role`, `UserRepository`, `UserService`, `UserMapper`, `AuthController`, `UserController`
 - `user/dto/`: `RegisterRequest`, `LoginRequest`, `AuthResponse`, `UserResponse`, `UpdateUserRequest`
 - `src/main/resources/application.yml` + `application-local.yml` (gitignored)
-- `db/migration/V1__init.sql`, `V2__cleanup.sql`, `V3__create_users.sql`
+- `db/migration/V1__init.sql`, `V2__cleanup.sql`, `V3__create_users.sql`, `V4__create_vocab.sql`
+- `seed/oxford_5000.csv` — ~300 từ mẫu (A1/A2/B1/B2) với IPA + CMU phonemes. Format: pipe-separated `word|cefr_level|pos|ipa|phonemes|definition`
 
 **Files đã tạo (frontend):**
 - `src/app/`: `App.tsx`, `providers.tsx` (QueryClient + Router), `router.tsx`
@@ -126,6 +127,7 @@ com.englishapp/
 ├── security/   JwtService, JwtAuthenticationFilter
 ├── common/     ApiResponse<T>, ApiException, GlobalExceptionHandler, HealthController
 ├── user/       User, UserRepository, UserService, AuthController, UserController, UserMapper
+├── vocab/      VocabEntry, VocabRepository, VocabSeeder (loads seed/oxford_5000.csv on startup)
 ├── video/      Video, SubtitleSegment, VideoVocab, VideoSummary
 ├── pipeline/   Spring Batch — video processing jobs
 ├── session/    LearningSession state machine (7 steps)
