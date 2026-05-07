@@ -2,14 +2,17 @@ package com.englishapp.video;
 
 import com.englishapp.common.ApiResponse;
 import com.englishapp.user.CEFRLevel;
+import com.englishapp.video.dto.SubtitleSegmentResponse;
 import com.englishapp.video.dto.VideoFilter;
 import com.englishapp.video.dto.VideoResponse;
+import com.englishapp.video.subtitle.SubtitleService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -18,6 +21,7 @@ import java.util.UUID;
 public class VideoController {
 
     private final VideoService videoService;
+    private final SubtitleService subtitleService;
 
     @GetMapping
     public ApiResponse<Page<VideoResponse>> listVideos(
@@ -38,5 +42,11 @@ public class VideoController {
     @GetMapping("/{id}")
     public ApiResponse<VideoResponse> getVideo(@PathVariable UUID id) {
         return ApiResponse.ok(videoService.getPublishedVideo(id));
+    }
+
+    @GetMapping("/{id}/subtitles")
+    public ApiResponse<List<SubtitleSegmentResponse>> getSubtitles(@PathVariable UUID id) {
+        videoService.requirePublished(id);
+        return ApiResponse.ok(subtitleService.getSegmentResponses(id));
     }
 }

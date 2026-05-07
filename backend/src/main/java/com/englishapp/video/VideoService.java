@@ -1,5 +1,8 @@
 package com.englishapp.video;
 
+import com.englishapp.ai.dto.VideoEnrichment;
+import com.englishapp.ai.dto.VideoSummary;
+import com.englishapp.ai.dto.WarmupWord;
 import com.englishapp.common.ApiException;
 import com.englishapp.storage.StorageService;
 import com.englishapp.video.dto.CreateVideoRequest;
@@ -7,6 +10,8 @@ import com.englishapp.video.dto.UpdateVideoRequest;
 import com.englishapp.video.dto.VideoFilter;
 import com.englishapp.video.dto.VideoResponse;
 import com.englishapp.video.dto.VideoStatusResponse;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -21,6 +26,8 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Slf4j
@@ -32,6 +39,7 @@ public class VideoService {
     private final VideoRepository videoRepository;
     private final StorageService storageService;
     private final FfmpegService ffmpegService;
+    private final ObjectMapper objectMapper;
 
     @Value("${app.storage.bucket-videos}")
     private String videosBucket;
@@ -50,7 +58,6 @@ public class VideoService {
         UUID videoId = UUID.randomUUID();
         String sourceKey = "videos/" + videoId + "/source.mp4";
 
-        // Save to temp file first (stream can only be read once)
         File tempVideo = null;
         File tempAudio = null;
         File tempThumb = null;
@@ -58,11 +65,9 @@ public class VideoService {
             tempVideo = Files.createTempFile("video-upload-", ".mp4").toFile();
             file.transferTo(tempVideo);
 
-            // Upload source to MinIO
             storageService.upload(videosBucket, sourceKey,
                     Files.newInputStream(tempVideo.toPath()), tempVideo.length(), "video/mp4");
 
-            // Build initial Video record
             Video video = Video.builder()
                     .id(videoId)
                     .title(request.getTitle())
@@ -73,7 +78,6 @@ public class VideoService {
                     .status(VideoStatus.DRAFT)
                     .build();
 
-            // FFmpeg processing
             try {
                 int durationSec = ffmpegService.getDurationSec(tempVideo);
                 video.setDurationSec(durationSec);
@@ -117,6 +121,12 @@ public class VideoService {
         return toResponse(video);
     }
 
+    @Transactional(readOnly = true)
+    public Video getVideoById(UUID id) {
+        return videoRepository.findById(id)
+                .orElseThrow(() -> ApiException.notFound("Video not found"));
+    }
+
     @Transactional
     public VideoResponse getPublishedVideo(UUID id) {
         Video video = videoRepository.findById(id)
@@ -126,6 +136,15 @@ public class VideoService {
         }
         videoRepository.incrementViewCount(id);
         return toResponse(video);
+    }
+
+    @Transactional(readOnly = true)
+    public void requirePublished(UUID id) {
+        Video video = videoRepository.findById(id)
+                .orElseThrow(() -> ApiException.notFound("Video not found"));
+        if (video.getStatus() != VideoStatus.PUBLISHED) {
+            throw ApiException.notFound("Video not found");
+        }
     }
 
     @Transactional(readOnly = true)
@@ -204,6 +223,23 @@ public class VideoService {
         videoRepository.save(v);
     }
 
+    @Transactional
+    public void saveEnrichment(UUID id, VideoEnrichment enrichment, VideoSummary summary) {
+        Video v = videoRepository.findById(id).orElseThrow();
+        try {
+            v.setWarmupWordsJson(objectMapper.writeValueAsString(enrichment.warmupWords()));
+            v.setCollocationsJson(objectMapper.writeValueAsString(enrichment.collocations()));
+            v.setSummary(summary.getSummary());
+            v.setKeyPointsJson(objectMapper.writeValueAsString(summary.getKeyPoints()));
+            v.setSpeakingQuestion(summary.getSpeakingQuestion());
+            v.setUpdatedAt(Instant.now());
+            videoRepository.save(v);
+            log.info("Saved enrichment for video {}", id);
+        } catch (Exception e) {
+            log.error("Failed to save enrichment for video {}: {}", id, e.getMessage());
+        }
+    }
+
     private void deleteSilently(File file) {
         if (file != null && file.exists()) {
             try { Files.delete(file.toPath()); } catch (IOException ignored) {}
@@ -233,6 +269,20 @@ public class VideoService {
                 .status(video.getStatus())
                 .viewCount(video.getViewCount())
                 .createdAt(video.getCreatedAt())
+                .summary(video.getSummary())
+                .speakingQuestion(video.getSpeakingQuestion())
+                .keyPoints(fromJson(video.getKeyPointsJson(), new TypeReference<>() {}, List.of()))
+                .warmupWords(fromJson(video.getWarmupWordsJson(), new TypeReference<>() {}, List.of()))
+                .collocations(fromJson(video.getCollocationsJson(), new TypeReference<>() {}, Map.of()))
                 .build();
+    }
+
+    private <T> T fromJson(String json, TypeReference<T> type, T defaultValue) {
+        if (json == null || json.isBlank()) return defaultValue;
+        try {
+            return objectMapper.readValue(json, type);
+        } catch (Exception e) {
+            return defaultValue;
+        }
     }
 }

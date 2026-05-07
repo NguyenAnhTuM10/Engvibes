@@ -62,6 +62,24 @@ public class Video {
     @Column(columnDefinition = "TEXT")
     private String errorMessage;
 
+    @Column(columnDefinition = "TEXT")
+    @Builder.Default
+    private String warmupWordsJson = "[]";
+
+    @Column(columnDefinition = "TEXT")
+    @Builder.Default
+    private String collocationsJson = "{}";
+
+    @Column(columnDefinition = "TEXT")
+    private String summary;
+
+    @Column(columnDefinition = "TEXT")
+    @Builder.Default
+    private String keyPointsJson = "[]";
+
+    @Column(columnDefinition = "TEXT")
+    private String speakingQuestion;
+
     @Column(nullable = false)
     @Builder.Default
     private Instant createdAt = Instant.now();

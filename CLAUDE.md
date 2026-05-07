@@ -31,8 +31,8 @@ Warmup → Listen → Phrase Practice → Shadow (Whisper) → **Retell (AI coac
 | P-BE2-2 | FFmpeg integration — extract audio (16kHz mono) + thumbnail + duration | ✅ Done |
 | P-BE2-3 | Whisper client + SubtitleSegment — chờ OPENAI_API_KEY để test thật | ✅ Done (code) |
 | P-BE2-4 | Async pipeline + status tracking | ✅ Done |
-| P-BE2-5 | NLP enrichment + LLM collocations | ⏳ TODO |
-| P-BE2-6 | LLM video summary + key points + speaking question | ⏳ TODO |
+| P-BE2-5 | NLP enrichment + LLM collocations | ✅ Done |
+| P-BE2-6 | LLM video summary + key points + speaking question | ✅ Done |
 | P-BE3+ | Learning Session, Shadow, Retell, Speak, Recommend | ⏳ TODO |
 
 **Files đã tạo (backend):**
@@ -46,11 +46,12 @@ Warmup → Listen → Phrase Practice → Shadow (Whisper) → **Retell (AI coac
 - `flashcard/`: `FlashcardDeck`, `UserCard`, `DeckRepository`, `CardRepository`, `FsrsScheduler`, `DeckService`, `CardService`, `DeckController`, `CardController`, `FlashcardMapper`
 - `storage/`: `StorageService` (interface — upload/download/presign/delete/exists), `S3StorageService` (MinIO, path-style, auto-create buckets)
 - `video/`: `Video`, `VideoStatus`, `VideoRepository`, `VideoService`, `FfmpegService`, `AdminVideoController`, `VideoController`
-- `video/dto/`: `CreateVideoRequest`, `UpdateVideoRequest`, `VideoResponse`, `VideoFilter`
+- `video/dto/`: `CreateVideoRequest`, `UpdateVideoRequest`, `VideoResponse` (incl. enrichment fields), `VideoFilter`, `SubtitleSegmentResponse`
 - `video/subtitle/`: `SubtitleSegment`, `SubtitleRepository`, `SubtitleService`
-- `pipeline/`: `VideoProcessingPipeline` (`@Async("videoProcessingExecutor")`, `NOT_SUPPORTED`, PROCESSING→PUBLISHED flow)
-- `ai/`: `WhisperClient`, `WhisperResult`
-- `db/migration/`: V1–V7 (`V7__create_subtitles.sql`)
+- `pipeline/`: `VideoProcessingPipeline` (`@Async("videoProcessingExecutor")`, `NOT_SUPPORTED`, PROCESSING→PUBLISHED flow incl. enrichment)
+- `ai/`: `WhisperClient`, `WhisperResult`, `LlmClient`, `NlpService`, `AIOrchestrationService`
+- `ai/dto/`: `WarmupWord`, `VideoEnrichment`, `VideoSummary`
+- `db/migration/`: V1–V8 (`V8__add_video_enrichment.sql` — thêm 5 cột TEXT vào videos)
 - `seed/oxford_5000.csv` — ~300 từ mẫu pipe-separated `word|cefr_level|pos|ipa|phonemes|definition`
 
 **Files đã tạo (frontend):**
@@ -152,8 +153,11 @@ com.englishapp/
 ├── storage/    StorageService (upload/download/presign/delete/exists), S3StorageService (MinIO)
 ├── ai/         WhisperClient (WebClient → OpenAI /audio/transcriptions, multipart)
 │               WhisperResult (text, segments, words với timestamps)
-│               (TODO) LlmClient, AIOrchestrationService
-├── pipeline/   (TODO BE-2.4) @Async video processing pipeline
+│               LlmClient (WebClient → OpenAI /chat/completions)
+│               NlpService (tokenize subtitles → lookup vocab_entries → warmup words)
+│               AIOrchestrationService (enrichVideo + generateVideoSummary, Redis cache forever)
+│               dto/: WarmupWord, VideoEnrichment, VideoSummary
+├── pipeline/   @Async video processing pipeline (Whisper → NLP → LLM → PUBLISHED)
 ├── session/    (TODO BE-3) LearningSession state machine (7 steps)
 ├── shadow/     (TODO BE-4) ShadowAttempt + phoneme scoring (CMU dict)
 ├── retell/     (TODO BE-5) RetellAttempt + GPT-4o-mini evaluation ★
@@ -229,16 +233,16 @@ VITE_WS_URL=ws://localhost:8080/ws
 ## Phiên tiếp theo — TODO & Context cần biết
 
 ### Việc cần làm ngay (theo thứ tự)
-1. **P-BE2-5: NLP enrichment** — extract vocab từ subtitles, chọn warmup words, LLM collocation extraction
-2. **P-BE2-6: LLM summary** — generate video summary + key_points + speaking question, cache Redis
-3. **Khi có OPENAI_API_KEY**: set vào `application-local.yml` rồi test lại `POST /api/admin/videos/{id}/process` với video thật tiếng Anh → verify `subtitle_segments` table có data, status chuyển PUBLISHED
+1. **P-BE3: Learning Session** — state machine 7 bước (Warmup → Listen → Phrase → Shadow → Retell → Speak → Review)
+2. **Khi có OPENAI_API_KEY**: set vào `application-local.yml` → test `POST /api/admin/videos/{id}/process` với video thật → verify subtitles + enrichment (warmup_words, collocations, summary)
 
 ### State hiện tại của pipeline (quan trọng)
 - `POST /api/admin/videos/{id}/process` trả **202 ngay**, pipeline chạy background trên `videoProcessingExecutor` (2-4 threads)
-- Pipeline flow: `PROCESSING → download audio.mp3 → WhisperClient → subtitle_segments → PUBLISHED (hoặc FAILED)`
+- Pipeline flow (đầy đủ): `PROCESSING → Whisper → subtitle_segments → NlpService (warmup) → LlmClient (collocations) → LlmClient (summary/keyPoints/speakingQuestion) → PUBLISHED (hoặc FAILED nếu Whisper fail)`
+- Enrichment non-critical: nếu LLM fail thì vẫn PUBLISHED, chỉ thiếu enrichment data
 - Poll status: `GET /api/admin/videos/{id}/status` → `{id, status, errorMessage}`
+- Redis cache: `video:{id}:collocations` và `video:{id}:summary` — no TTL (cache forever)
 - Video upload flow: `MultipartFile → temp file → MinIO (source.mp4) → FFmpeg → MinIO (audio.mp3 + thumbnail.jpg) → DB (DRAFT)`
-- **Chưa có**: NLP enrichment, LLM calls, WebSocket notifications
 
 ### Bug quan trọng đã gặp — cần nhớ cho phases sau
 **Transaction + External Service pattern:**
@@ -274,9 +278,22 @@ public Result processWithExternalService(UUID id) {
 | GET | `/api/videos/{id}` | JWT | Video detail + view++ |
 | GET/POST | `/api/admin/videos` | ADMIN | List all / upload |
 | GET/PATCH/DELETE | `/api/admin/videos/{id}` | ADMIN | Quản lý video |
-| POST | `/api/admin/videos/{id}/process` | ADMIN | Trigger Whisper transcription |
+| POST | `/api/admin/videos/{id}/process` | ADMIN | Trigger full pipeline (Whisper + NLP + LLM) |
+| GET | `/api/admin/videos/{id}/subtitles` | ADMIN | Subtitle segments với word timings |
+| GET | `/api/videos/{id}/subtitles` | JWT | Subtitle segments (PUBLISHED only) |
 
-### Cách test Whisper khi có API key
+### VideoResponse enrichment fields (có sau khi PUBLISHED)
+```json
+{
+  "summary": "...",
+  "keyPoints": ["...", "..."],
+  "speakingQuestion": "...",
+  "warmupWords": [{"word":"achieve","ipa":"...","definition":"...","cefrLevel":"B1","partOfSpeech":"verb"}],
+  "collocations": {"achieve": ["achieve a goal", "achieve success", "achieve results"]}
+}
+```
+
+### Cách test full pipeline khi có API key
 ```bash
 # Set OPENAI_API_KEY trong application-local.yml rồi restart
 # Upload video tiếng Anh thật (30-60s):
@@ -285,13 +302,21 @@ curl -X POST http://localhost:8080/api/admin/videos \
   -F "file=@video.mp4;type=video/mp4" \
   -F 'metadata={"title":"...","topic":"...","cefrLevel":"B1"};type=application/json'
 
-# Trigger processing:
+# Trigger processing (202 ngay, pipeline async):
 curl -X POST http://localhost:8080/api/admin/videos/{id}/process \
+  -H "Authorization: Bearer $TOKEN"
+
+# Poll status:
+curl http://localhost:8080/api/admin/videos/{id}/status \
   -H "Authorization: Bearer $TOKEN"
 
 # Verify subtitles:
 docker exec englishapp-postgres psql -U englishapp -d englishapp \
   -c "SELECT order_index, start_ms, end_ms, text FROM subtitle_segments WHERE video_id='...' ORDER BY order_index;"
+
+# Verify enrichment:
+docker exec englishapp-postgres psql -U englishapp -d englishapp \
+  -c "SELECT summary, speaking_question, warmup_words FROM videos WHERE id='...';"
 ```
 
 ---

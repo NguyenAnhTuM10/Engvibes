@@ -2,6 +2,7 @@ package com.englishapp.video.subtitle;
 
 import com.englishapp.ai.WhisperClient;
 import com.englishapp.ai.WhisperResult;
+import com.englishapp.video.dto.SubtitleSegmentResponse;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -73,6 +74,20 @@ public class SubtitleService {
     @Transactional(readOnly = true)
     public List<SubtitleSegment> getSegments(UUID videoId) {
         return subtitleRepository.findByVideoIdOrderByOrderIndex(videoId);
+    }
+
+    @Transactional(readOnly = true)
+    public List<SubtitleSegmentResponse> getSegmentResponses(UUID videoId) {
+        return subtitleRepository.findByVideoIdOrderByOrderIndex(videoId).stream()
+                .map(s -> SubtitleSegmentResponse.builder()
+                        .id(s.getId())
+                        .orderIndex(s.getOrderIndex())
+                        .startMs(s.getStartMs())
+                        .endMs(s.getEndMs())
+                        .text(s.getText())
+                        .wordTimings(s.getWordTimings())
+                        .build())
+                .toList();
     }
 
     private List<List<WhisperResult.WhisperWord>> groupWords(List<WhisperResult.WhisperWord> words) {

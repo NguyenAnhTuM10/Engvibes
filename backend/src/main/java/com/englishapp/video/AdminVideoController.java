@@ -3,10 +3,12 @@ package com.englishapp.video;
 import com.englishapp.common.ApiResponse;
 import com.englishapp.pipeline.VideoProcessingPipeline;
 import com.englishapp.video.dto.CreateVideoRequest;
+import com.englishapp.video.dto.SubtitleSegmentResponse;
 import com.englishapp.video.dto.UpdateVideoRequest;
 import com.englishapp.video.dto.VideoFilter;
 import com.englishapp.video.dto.VideoResponse;
 import com.englishapp.video.dto.VideoStatusResponse;
+import com.englishapp.video.subtitle.SubtitleService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -18,6 +20,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -28,6 +31,7 @@ public class AdminVideoController {
 
     private final VideoService videoService;
     private final VideoProcessingPipeline pipeline;
+    private final SubtitleService subtitleService;
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @ResponseStatus(HttpStatus.CREATED)
@@ -70,5 +74,10 @@ public class AdminVideoController {
     @GetMapping("/{id}/status")
     public ApiResponse<VideoStatusResponse> getStatus(@PathVariable UUID id) {
         return ApiResponse.ok(videoService.getVideoStatus(id));
+    }
+
+    @GetMapping("/{id}/subtitles")
+    public ApiResponse<List<SubtitleSegmentResponse>> getSubtitles(@PathVariable UUID id) {
+        return ApiResponse.ok(subtitleService.getSegmentResponses(id));
     }
 }
