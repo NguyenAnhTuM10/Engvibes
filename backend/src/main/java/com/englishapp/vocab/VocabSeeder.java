@@ -13,7 +13,9 @@ import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 @Slf4j
 @Component
@@ -35,7 +37,7 @@ public class VocabSeeder implements ApplicationRunner {
             return;
         }
 
-        List<VocabEntry> entries = new ArrayList<>();
+        Map<String, VocabEntry> entryMap = new LinkedHashMap<>();
         try (BufferedReader reader = new BufferedReader(
                 new InputStreamReader(resource.getInputStream(), StandardCharsets.UTF_8))) {
 
@@ -49,10 +51,12 @@ public class VocabSeeder implements ApplicationRunner {
                 if (parts.length < 6) continue;
 
                 try {
-                    entries.add(VocabEntry.builder()
-                            .word(parts[0].trim())
+                    String word = parts[0].trim();
+                    String pos = parts[2].trim();
+                    entryMap.putIfAbsent(word + "|" + pos, VocabEntry.builder()
+                            .word(word)
                             .cefrLevel(CEFRLevel.valueOf(parts[1].trim()))
-                            .partOfSpeech(parts[2].trim())
+                            .partOfSpeech(pos)
                             .ipa(parts[3].trim())
                             .phonemes(parts[4].trim())
                             .definition(parts[5].trim())
@@ -63,6 +67,7 @@ public class VocabSeeder implements ApplicationRunner {
             }
         }
 
+        List<VocabEntry> entries = new ArrayList<>(entryMap.values());
         vocabRepository.saveAll(entries);
         log.info("Seeded {} vocab entries", entries.size());
     }
