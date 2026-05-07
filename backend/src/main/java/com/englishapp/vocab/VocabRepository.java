@@ -12,4 +12,5 @@ public interface VocabRepository extends JpaRepository<VocabEntry, UUID> {
     List<VocabEntry> findByCefrLevel(CEFRLevel cefrLevel);
     boolean existsByWord(String word);
     List<VocabEntry> findByWordIn(List<String> words);
+    java.util.Optional<VocabEntry> findFirstByWordIgnoreCase(String word);
 }
