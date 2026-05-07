@@ -35,7 +35,9 @@ Warmup → Listen → Phrase Practice → Shadow (Whisper) → **Retell (AI coac
 | P-BE2-6 | LLM video summary + key points + speaking question | ✅ Done |
 | P-BE3-1 | LearningSession state machine (7 steps, XP, streak) | ✅ Done |
 | P-BE3-2 | Warmup + Listen APIs | ✅ Done |
-| P-BE4+ | Phrase Practice, Shadow, Retell, Speak, Recommend | ⏳ TODO |
+| P-BE4-1 | Phrase Practice — Whisper + WordDiff scoring | ✅ Done |
+| P-BE4-2 | Shadow — Whisper + CMU phoneme detection | ✅ Done |
+| P-BE5+ | Retell Coach ★, Speak, Recommend | ⏳ TODO |
 
 **Files đã tạo (backend):**
 - `EnglishAppApplication.java`
