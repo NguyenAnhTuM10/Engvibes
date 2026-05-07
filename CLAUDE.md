@@ -37,7 +37,10 @@ Warmup → Listen → Phrase Practice → Shadow (Whisper) → **Retell (AI coac
 | P-BE3-2 | Warmup + Listen APIs | ✅ Done |
 | P-BE4-1 | Phrase Practice — Whisper + WordDiff scoring | ✅ Done |
 | P-BE4-2 | Shadow — Whisper + CMU phoneme detection | ✅ Done |
-| P-BE5+ | Retell Coach ★, Speak, Recommend | ⏳ TODO |
+| P-BE5-1 | Retell Coach — scaffold L1-L4, Whisper, LLM eval, rate limit | ✅ Done |
+| P-BE5-2 | Speak — speaking question, Whisper, LLM eval, rate limit | ✅ Done |
+| P-BE5-3 | Quick Review — cards from video, FSRS review | ✅ Done |
+| P-BE6+ | Recommendation engine | ⏳ TODO |
 
 **Files đã tạo (backend):**
 - `EnglishAppApplication.java`
@@ -55,9 +58,15 @@ Warmup → Listen → Phrase Practice → Shadow (Whisper) → **Retell (AI coac
 - `pipeline/`: `VideoProcessingPipeline` (`@Async("videoProcessingExecutor")`, `NOT_SUPPORTED`, PROCESSING→PUBLISHED flow incl. enrichment)
 - `ai/`: `WhisperClient`, `WhisperResult`, `LlmClient`, `NlpService`, `AIOrchestrationService`
 - `ai/dto/`: `WarmupWord`, `VideoEnrichment`, `VideoSummary`
-- `db/migration/`: V1–V9 (`V8__add_video_enrichment.sql` — thêm 5 cột TEXT vào videos; `V9__create_sessions.sql` — learning_sessions table)
-- `session/`: `LearningSession`, `SessionStatus`, `SessionRepository`, `SessionService`, `SessionController`, `WarmupController`, `ListenController`
+- `db/migration/`: V1–V13 (V8=enrichment, V9=sessions, V10=phrase_attempts, V11=shadow_attempts+phoneme_stats, V12=retell_attempts, V13=speak_attempts)
+- `session/`: `LearningSession`, `SessionStatus`, `SessionRepository`, `SessionService`, `SessionController`, `WarmupController`, `ListenController`, `QuickReviewController`
 - `session/dto/`: `CreateSessionRequest`, `SessionResponse`, `AdvanceStepRequest`, `SetScaffoldRequest`, `WarmupWordResponse`, `MarkWarmupRequest`, `AddVocabRequest`
+- `shadow/`: `ShadowAttempt`, `ShadowAttemptRepository`, `ShadowController`, `WordMatch`, `WordDiffUtil`, `CmuDictService`, `PhonemeDetectionService`, `UserPhonemeStats`, `UserPhonemeStatsId`, `UserPhonemeStatsRepository`
+- `retell/`: `RetellAttempt`, `RetellAttemptRepository`, `RetellController`, `RetellService`, `RateLimitService`
+- `retell/dto/`: `RetellFeedback`, `RetellScaffoldResponse`, `RetellStartRequest`
+- `speak/`: `SpeakAttempt`, `SpeakAttemptRepository`, `SpeakController`
+- `speak/dto/`: `SpeakFeedback`, `SpeakingQuestionResponse`
+- `resources/data/cmudict.txt` — sample ~200 common words in CMU format (graceful fallback if missing)
 - `seed/oxford_5000.csv` — ~300 từ mẫu pipe-separated `word|cefr_level|pos|ipa|phonemes|definition`
 
 **Files đã tạo (frontend):**
@@ -164,10 +173,10 @@ com.englishapp/
 │               AIOrchestrationService (enrichVideo + generateVideoSummary, Redis cache forever)
 │               dto/: WarmupWord, VideoEnrichment, VideoSummary
 ├── pipeline/   @Async video processing pipeline (Whisper → NLP → LLM → PUBLISHED)
-├── session/    (TODO BE-3) LearningSession state machine (7 steps)
-├── shadow/     (TODO BE-4) ShadowAttempt + phoneme scoring (CMU dict)
-├── retell/     (TODO BE-5) RetellAttempt + GPT-4o-mini evaluation ★
-├── speak/      (TODO BE-5) SpeakAttempt + AI evaluation
+├── session/    LearningSession state machine (7 steps, XP, streak) + WarmupController + ListenController + QuickReviewController
+├── shadow/     ShadowAttempt + WordDiffUtil + CmuDictService + PhonemeDetectionService + UserPhonemeStats
+├── retell/     RetellAttempt + RetellService (scaffold L1-L4, Whisper, LLM eval) + RateLimitService (Redis INCR)
+├── speak/      SpeakAttempt + SpeakController (Whisper + LLM eval, 50/day limit)
 └── recommend/  (TODO BE-6) content-based recommendation
 ```
 
@@ -239,8 +248,9 @@ VITE_WS_URL=ws://localhost:8080/ws
 ## Phiên tiếp theo — TODO & Context cần biết
 
 ### Việc cần làm ngay (theo thứ tự)
-1. **P-BE4: Phrase Practice + Shadowing** — Phrase attempts (Whisper compare), Shadow + CMU phoneme detection
-2. **Khi có OPENAI_API_KEY**: set vào `application-local.yml` → test pipeline thật
+1. **P-BE6: Recommendation engine** — content-based (CEFR match + topic similarity)
+2. **Frontend** — Bắt đầu xây UI: Auth, Video list, Learning session flow (7 bước)
+3. **Khi có OPENAI_API_KEY**: set vào `application-local.yml` → test pipeline thật với video tiếng Anh thật
 
 
 ### State hiện tại của pipeline (quan trọng)
@@ -299,6 +309,14 @@ public Result processWithExternalService(UUID id) {
 | GET | `/api/sessions/{id}/listen/subtitles` | JWT | Subtitle segments for listen step |
 | POST | `/api/sessions/{id}/listen/add-vocab` | JWT | Add vocab from listen to deck |
 | GET | `/api/sessions/{id}/listen/vocab-info?word=` | JWT | Lookup word in vocab_entries |
+| POST | `/api/sessions/{id}/phrase/{segmentIdx}/attempt` | JWT | Phrase practice (Whisper compare), max 3 attempts |
+| POST | `/api/sessions/{id}/shadow/{segmentIdx}/attempt` | JWT | Shadow attempt (Whisper + phoneme detection), max 3 |
+| POST | `/api/sessions/{id}/retell/start` | JWT | Get scaffold (L1-L4) for retell step |
+| POST | `/api/sessions/{id}/retell/attempt` | JWT | Submit retell audio (Whisper + LLM eval, 10/day limit) |
+| GET | `/api/sessions/{id}/speak/question` | JWT | Speaking question + suggested vocab/collocations |
+| POST | `/api/sessions/{id}/speak/attempt` | JWT | Submit speak audio (Whisper + LLM eval, 50/day limit) |
+| GET | `/api/sessions/{id}/quick-review` | JWT | Cards added during this video session |
+| POST | `/api/sessions/{id}/quick-review/review/{cardId}` | JWT | Review a card (FSRS) |
 
 ### VideoResponse enrichment fields (có sau khi PUBLISHED)
 ```json
@@ -379,6 +397,12 @@ tasklist /FI "PID eq <pid>"   # nếu thấy postgres.exe → bị conflict
 ### BUG-3: TypeScript `baseUrl` deprecated (TS 6+)
 **Triệu chứng:** `tsc -b` lỗi `Option 'baseUrl' is deprecated`.  
 **Fix:** Thêm `"ignoreDeprecations": "6.0"` vào `compilerOptions` của `tsconfig.app.json`.
+
+### BUG-7: LazyInitializationException khi MapStruct map LAZY @ManyToOne ngoài transaction
+**Triệu chứng:** `GET /api/sessions/{id}/quick-review` → 500 Internal Server Error.  
+**Root cause:** `UserCard.vocab` là `@ManyToOne(fetch = FetchType.LAZY)` — khi controller gọi `cardRepository.findByUserIdAndSourceVideoId()` rồi stream-map qua MapStruct, JPA session đã đóng nên proxy không load được.  
+**Fix đã áp dụng:** Thay Spring Data method name bằng `@Query("SELECT c FROM UserCard c JOIN FETCH c.vocab WHERE ...")` — buộc eager load vocab trong cùng một query.  
+**Pattern cần nhớ:** Bất kỳ query nào trả `List<Entity>` mà entity có LAZY relation và sẽ được access ngay sau đó (không trong @Transactional) → dùng `JOIN FETCH` trong @Query.
 
 ---
 
