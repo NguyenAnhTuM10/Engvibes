@@ -1,10 +1,12 @@
 package com.englishapp.video;
 
 import com.englishapp.common.ApiResponse;
+import com.englishapp.pipeline.VideoProcessingPipeline;
 import com.englishapp.video.dto.CreateVideoRequest;
 import com.englishapp.video.dto.UpdateVideoRequest;
 import com.englishapp.video.dto.VideoFilter;
 import com.englishapp.video.dto.VideoResponse;
+import com.englishapp.video.dto.VideoStatusResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -25,6 +27,7 @@ import java.util.UUID;
 public class AdminVideoController {
 
     private final VideoService videoService;
+    private final VideoProcessingPipeline pipeline;
 
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @ResponseStatus(HttpStatus.CREATED)
@@ -57,7 +60,15 @@ public class AdminVideoController {
     }
 
     @PostMapping("/{id}/process")
+    @ResponseStatus(HttpStatus.ACCEPTED)
     public ApiResponse<VideoResponse> processVideo(@PathVariable UUID id) {
-        return ApiResponse.ok(videoService.processVideo(id), "Processing triggered");
+        VideoResponse current = videoService.validateForProcessing(id);
+        pipeline.processVideo(id);
+        return ApiResponse.ok(current, "Processing started");
+    }
+
+    @GetMapping("/{id}/status")
+    public ApiResponse<VideoStatusResponse> getStatus(@PathVariable UUID id) {
+        return ApiResponse.ok(videoService.getVideoStatus(id));
     }
 }

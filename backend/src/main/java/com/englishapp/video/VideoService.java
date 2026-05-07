@@ -6,6 +6,7 @@ import com.englishapp.video.dto.CreateVideoRequest;
 import com.englishapp.video.dto.UpdateVideoRequest;
 import com.englishapp.video.dto.VideoFilter;
 import com.englishapp.video.dto.VideoResponse;
+import com.englishapp.video.dto.VideoStatusResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -22,8 +23,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
 
-import org.springframework.transaction.annotation.Propagation;
-
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -33,7 +32,6 @@ public class VideoService {
     private final VideoRepository videoRepository;
     private final StorageService storageService;
     private final FfmpegService ffmpegService;
-    private final com.englishapp.video.subtitle.SubtitleService subtitleService;
 
     @Value("${app.storage.bucket-videos}")
     private String videosBucket;
@@ -176,30 +174,25 @@ public class VideoService {
         videoRepository.save(video);
     }
 
-    // NOT_SUPPORTED: chạy ngoài transaction để catch block có thể save FAILED
-    // nếu không, exception trong subtitleService mark transaction rollback-only
-    @Transactional(propagation = Propagation.NOT_SUPPORTED)
-    public VideoResponse processVideo(UUID id) {
+    @Transactional(readOnly = true)
+    public VideoResponse validateForProcessing(UUID id) {
         Video video = videoRepository.findById(id)
                 .orElseThrow(() -> ApiException.notFound("Video not found"));
-
         if (video.getStatus() != VideoStatus.DRAFT && video.getStatus() != VideoStatus.FAILED) {
             throw ApiException.badRequest("Video must be in DRAFT or FAILED status to process");
         }
+        return toResponse(video);
+    }
 
-        setVideoStatus(id, VideoStatus.PROCESSING, null);
-
-        try {
-            String audioKey = "videos/" + id + "/audio.mp3";
-            byte[] audioBytes = storageService.download(audiosBucket, audioKey);
-            subtitleService.processVideoTranscription(id, audioBytes);
-            log.info("Transcription done for video {}", id);
-        } catch (Exception e) {
-            log.error("Video processing failed for {}: {}", id, e.getMessage());
-            setVideoStatus(id, VideoStatus.FAILED, e.getMessage());
-        }
-
-        return toResponse(videoRepository.findById(id).orElseThrow());
+    @Transactional(readOnly = true)
+    public VideoStatusResponse getVideoStatus(UUID id) {
+        Video video = videoRepository.findById(id)
+                .orElseThrow(() -> ApiException.notFound("Video not found"));
+        return VideoStatusResponse.builder()
+                .id(video.getId())
+                .status(video.getStatus())
+                .errorMessage(video.getErrorMessage())
+                .build();
     }
 
     @Transactional
