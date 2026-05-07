@@ -28,22 +28,29 @@ Warmup → Listen → Phrase Practice → Shadow (Whisper) → **Retell (AI coac
 | P-SETUP-5 | Cleanup demo + GitHub Actions CI | ✅ Done |
 | P-BE1 | User + JWT Auth + Vocab seed + Flashcard FSRS | ✅ Done |
 | P-BE2-1 | Video entity + Admin upload to MinIO + presigned URL | ✅ Done |
+| P-BE2-2 | FFmpeg integration — extract audio (16kHz mono) + thumbnail + duration | ✅ Done |
+| P-BE2-3 | Whisper client + SubtitleSegment — chờ OPENAI_API_KEY để test thật | ✅ Done (code) |
+| P-BE2-4 | Async pipeline + status tracking | ⏳ TODO |
+| P-BE2-5 | NLP enrichment + LLM collocations | ⏳ TODO |
+| P-BE2-6 | LLM video summary + key points + speaking question | ⏳ TODO |
+| P-BE3+ | Learning Session, Shadow, Retell, Speak, Recommend | ⏳ TODO |
 
 **Files đã tạo (backend):**
 - `EnglishAppApplication.java`
-- `common/`: `ApiResponse<T>`, `ApiException`, `GlobalExceptionHandler` (xử lý cả `AccessDeniedException` → 403), `HealthController`
-- `config/`: `SecurityConfig` (JWT filter chain, `@EnableMethodSecurity`), `CorsConfig`, `RedisConfig`, `AsyncConfig`, `WebSocketConfig`, `OpenApiConfig`, `AppConfig` (PasswordEncoder), `StorageConfig` (S3Client + S3Presigner cho MinIO)
+- `common/`: `ApiResponse<T>`, `ApiException`, `GlobalExceptionHandler` (xử lý `AccessDeniedException` → 403), `HealthController`
+- `config/`: `SecurityConfig` (JWT, `@EnableMethodSecurity`), `CorsConfig`, `RedisConfig`, `AsyncConfig`, `WebSocketConfig`, `OpenApiConfig`, `AppConfig`, `StorageConfig` (S3Client + S3Presigner)
 - `security/`: `JwtService`, `JwtAuthenticationFilter`
 - `user/`: `User`, `CEFRLevel`, `Role`, `UserRepository`, `UserService`, `UserMapper`, `AuthController`, `UserController`
 - `user/dto/`: `RegisterRequest`, `LoginRequest`, `AuthResponse`, `UserResponse`, `UpdateUserRequest`
 - `vocab/`: `VocabEntry`, `VocabRepository`, `VocabMapper`, `VocabSeeder`
 - `flashcard/`: `FlashcardDeck`, `UserCard`, `DeckRepository`, `CardRepository`, `FsrsScheduler`, `DeckService`, `CardService`, `DeckController`, `CardController`, `FlashcardMapper`
-- `storage/`: `StorageService` (interface), `S3StorageService` (MinIO impl, auto-creates buckets on startup)
-- `video/`: `Video`, `VideoStatus`, `VideoRepository`, `VideoService`, `AdminVideoController` (`/api/admin/videos`, ADMIN only), `VideoController` (`/api/videos`, PUBLISHED only)
+- `storage/`: `StorageService` (interface — upload/download/presign/delete/exists), `S3StorageService` (MinIO, path-style, auto-create buckets)
+- `video/`: `Video`, `VideoStatus`, `VideoRepository`, `VideoService`, `FfmpegService`, `AdminVideoController`, `VideoController`
 - `video/dto/`: `CreateVideoRequest`, `UpdateVideoRequest`, `VideoResponse`, `VideoFilter`
-- `src/main/resources/application.yml` + `application-local.yml` (gitignored)
-- `db/migration/V1__init.sql`, `V2__cleanup.sql`, `V3__create_users.sql`, `V4__create_vocab.sql`, `V5__create_flashcards.sql`, `V6__create_videos.sql`
-- `seed/oxford_5000.csv` — ~300 từ mẫu (A1/A2/B1/B2) với IPA + CMU phonemes. Format: pipe-separated `word|cefr_level|pos|ipa|phonemes|definition`
+- `video/subtitle/`: `SubtitleSegment`, `SubtitleRepository`, `SubtitleService`
+- `ai/`: `WhisperClient`, `WhisperResult`
+- `db/migration/`: V1–V7 (`V7__create_subtitles.sql`)
+- `seed/oxford_5000.csv` — ~300 từ mẫu pipe-separated `word|cefr_level|pos|ipa|phonemes|definition`
 
 **Files đã tạo (frontend):**
 - `src/app/`: `App.tsx`, `providers.tsx` (QueryClient + Router), `router.tsx`
@@ -136,16 +143,20 @@ com.englishapp/
 ├── vocab/      VocabEntry, VocabRepository, VocabMapper, VocabSeeder (loads seed/oxford_5000.csv on startup)
 ├── flashcard/  FlashcardDeck, UserCard, DeckRepository, CardRepository, FsrsScheduler (FSRS-4.5)
 │               DeckService, CardService, DeckController (/api/decks), CardController (/api/cards)
-├── video/      Video (DRAFT/PROCESSING/PUBLISHED/FAILED), VideoRepository, VideoService
-│               AdminVideoController (/api/admin/videos — ADMIN only, multipart upload)
-│               VideoController (/api/videos — PUBLISHED only, presigned URL)
-├── storage/    StorageService (interface), S3StorageService (MinIO, path-style, auto-create buckets)
-├── pipeline/   (TODO BE-2.2+) async video processing
+├── video/      Video, VideoStatus, VideoRepository, VideoService (upload+process+CRUD)
+│               FfmpegService (getDuration/extractAudio/extractThumbnail via ProcessBuilder)
+│               AdminVideoController (/api/admin/videos — ADMIN, @PreAuthorize)
+│               VideoController (/api/videos — PUBLISHED only + viewCount++)
+│               subtitle/: SubtitleSegment, SubtitleRepository, SubtitleService (Whisper→groupWords→save)
+├── storage/    StorageService (upload/download/presign/delete/exists), S3StorageService (MinIO)
+├── ai/         WhisperClient (WebClient → OpenAI /audio/transcriptions, multipart)
+│               WhisperResult (text, segments, words với timestamps)
+│               (TODO) LlmClient, AIOrchestrationService
+├── pipeline/   (TODO BE-2.4) @Async video processing pipeline
 ├── session/    (TODO BE-3) LearningSession state machine (7 steps)
 ├── shadow/     (TODO BE-4) ShadowAttempt + phoneme scoring (CMU dict)
 ├── retell/     (TODO BE-5) RetellAttempt + GPT-4o-mini evaluation ★
 ├── speak/      (TODO BE-5) SpeakAttempt + AI evaluation
-├── ai/         (TODO BE-2.3+) AIOrchestrationService — tất cả OpenAI calls qua đây
 └── recommend/  (TODO BE-6) content-based recommendation
 ```
 
@@ -210,6 +221,76 @@ Dùng CMU Pronouncing Dictionary (CSV ~134k words). Khi shadow: Whisper transcri
 ```
 VITE_API_URL=http://localhost:8080
 VITE_WS_URL=ws://localhost:8080/ws
+```
+
+---
+
+## Phiên tiếp theo — TODO & Context cần biết
+
+### Việc cần làm ngay (theo thứ tự)
+1. **P-BE2-4: Async pipeline** — wrap `VideoService.processVideo` thành `@Async`, trả 202 ngay, poll status qua `GET /api/admin/videos/{id}/status`
+2. **P-BE2-5: NLP enrichment** — extract vocab từ subtitles, chọn warmup words, LLM collocation extraction
+3. **P-BE2-6: LLM summary** — generate video summary + key_points + speaking question, cache Redis
+4. **Khi có OPENAI_API_KEY**: set vào `application-local.yml` rồi test lại `POST /api/admin/videos/{id}/process` với video thật tiếng Anh → verify `subtitle_segments` table có data
+
+### State hiện tại của pipeline (quan trọng)
+- `POST /api/admin/videos/{id}/process` hiện chạy **đồng bộ** (blocking), trả 200 sau khi xong
+- Video upload flow: `MultipartFile → temp file → MinIO (source.mp4) → FFmpeg → MinIO (audio.mp3 + thumbnail.jpg) → DB`
+- Whisper call: `audio.mp3 từ MinIO → WhisperClient → group words → subtitle_segments table`
+- **Chưa có**: NLP enrichment, LLM calls, async, WebSocket notifications
+
+### Bug quan trọng đã gặp — cần nhớ cho phases sau
+**Transaction + External Service pattern:**
+Bất kỳ method nào vừa gọi external service (Whisper/LLM) vừa cần save FAILED status khi lỗi PHẢI dùng `@Transactional(propagation = Propagation.NOT_SUPPORTED)`. Lý do: nếu để default `@Transactional`, exception từ external call mark transaction rollback-only → catch block save FAILED cũng bị rollback → 500 error. Pattern đúng:
+```java
+@Transactional(propagation = Propagation.NOT_SUPPORTED)
+public Result processWithExternalService(UUID id) {
+    setStatus(id, PROCESSING);          // own transaction
+    try {
+        externalService.call();          // no transaction
+        subtitleService.save();          // own transaction (REQUIRES_NEW or default)
+    } catch (Exception e) {
+        setStatus(id, FAILED, e.msg);   // own transaction — KHÔNG bị rollback
+    }
+}
+```
+
+### Endpoints đã có (summary)
+| Method | Path | Auth | Mô tả |
+|---|---|---|---|
+| POST | `/api/auth/register` | - | Đăng ký |
+| POST | `/api/auth/login` | - | Đăng nhập |
+| GET | `/api/me` | JWT | Thông tin user |
+| PATCH | `/api/me` | JWT | Cập nhật user |
+| GET/POST | `/api/decks` | JWT | Flashcard decks |
+| PATCH/DELETE | `/api/decks/{id}` | JWT | Sửa/xóa deck |
+| GET | `/api/decks/{id}/cards` | JWT | Cards trong deck |
+| GET | `/api/decks/{id}/cards/due` | JWT | Cards đến hạn |
+| POST | `/api/cards` | JWT | Thêm card |
+| POST | `/api/cards/{id}/review` | JWT | Review FSRS |
+| DELETE | `/api/cards/{id}` | JWT | Xóa card |
+| GET | `/api/videos` | JWT | List PUBLISHED videos |
+| GET | `/api/videos/{id}` | JWT | Video detail + view++ |
+| GET/POST | `/api/admin/videos` | ADMIN | List all / upload |
+| GET/PATCH/DELETE | `/api/admin/videos/{id}` | ADMIN | Quản lý video |
+| POST | `/api/admin/videos/{id}/process` | ADMIN | Trigger Whisper transcription |
+
+### Cách test Whisper khi có API key
+```bash
+# Set OPENAI_API_KEY trong application-local.yml rồi restart
+# Upload video tiếng Anh thật (30-60s):
+curl -X POST http://localhost:8080/api/admin/videos \
+  -H "Authorization: Bearer $TOKEN" \
+  -F "file=@video.mp4;type=video/mp4" \
+  -F 'metadata={"title":"...","topic":"...","cefrLevel":"B1"};type=application/json'
+
+# Trigger processing:
+curl -X POST http://localhost:8080/api/admin/videos/{id}/process \
+  -H "Authorization: Bearer $TOKEN"
+
+# Verify subtitles:
+docker exec englishapp-postgres psql -U englishapp -d englishapp \
+  -c "SELECT order_index, start_ms, end_ms, text FROM subtitle_segments WHERE video_id='...' ORDER BY order_index;"
 ```
 
 ---
