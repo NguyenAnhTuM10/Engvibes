@@ -27,16 +27,22 @@ Warmup → Listen → Phrase Practice → Shadow (Whisper) → **Retell (AI coac
 | P-SETUP-4 | Verify FE↔BE↔DB (demo module) | ✅ Done |
 | P-SETUP-5 | Cleanup demo + GitHub Actions CI | ✅ Done |
 | P-BE1 | User + JWT Auth + Vocab seed + Flashcard FSRS | ✅ Done |
+| P-BE2-1 | Video entity + Admin upload to MinIO + presigned URL | ✅ Done |
 
 **Files đã tạo (backend):**
 - `EnglishAppApplication.java`
-- `common/`: `ApiResponse<T>`, `ApiException`, `GlobalExceptionHandler`, `HealthController`
-- `config/`: `SecurityConfig` (JWT filter chain), `CorsConfig`, `RedisConfig`, `AsyncConfig`, `WebSocketConfig`, `OpenApiConfig`, `AppConfig` (PasswordEncoder)
+- `common/`: `ApiResponse<T>`, `ApiException`, `GlobalExceptionHandler` (xử lý cả `AccessDeniedException` → 403), `HealthController`
+- `config/`: `SecurityConfig` (JWT filter chain, `@EnableMethodSecurity`), `CorsConfig`, `RedisConfig`, `AsyncConfig`, `WebSocketConfig`, `OpenApiConfig`, `AppConfig` (PasswordEncoder), `StorageConfig` (S3Client + S3Presigner cho MinIO)
 - `security/`: `JwtService`, `JwtAuthenticationFilter`
 - `user/`: `User`, `CEFRLevel`, `Role`, `UserRepository`, `UserService`, `UserMapper`, `AuthController`, `UserController`
 - `user/dto/`: `RegisterRequest`, `LoginRequest`, `AuthResponse`, `UserResponse`, `UpdateUserRequest`
+- `vocab/`: `VocabEntry`, `VocabRepository`, `VocabMapper`, `VocabSeeder`
+- `flashcard/`: `FlashcardDeck`, `UserCard`, `DeckRepository`, `CardRepository`, `FsrsScheduler`, `DeckService`, `CardService`, `DeckController`, `CardController`, `FlashcardMapper`
+- `storage/`: `StorageService` (interface), `S3StorageService` (MinIO impl, auto-creates buckets on startup)
+- `video/`: `Video`, `VideoStatus`, `VideoRepository`, `VideoService`, `AdminVideoController` (`/api/admin/videos`, ADMIN only), `VideoController` (`/api/videos`, PUBLISHED only)
+- `video/dto/`: `CreateVideoRequest`, `UpdateVideoRequest`, `VideoResponse`, `VideoFilter`
 - `src/main/resources/application.yml` + `application-local.yml` (gitignored)
-- `db/migration/V1__init.sql`, `V2__cleanup.sql`, `V3__create_users.sql`, `V4__create_vocab.sql`, `V5__create_flashcards.sql`
+- `db/migration/V1__init.sql`, `V2__cleanup.sql`, `V3__create_users.sql`, `V4__create_vocab.sql`, `V5__create_flashcards.sql`, `V6__create_videos.sql`
 - `seed/oxford_5000.csv` — ~300 từ mẫu (A1/A2/B1/B2) với IPA + CMU phonemes. Format: pipe-separated `word|cefr_level|pos|ipa|phonemes|definition`
 
 **Files đã tạo (frontend):**
@@ -130,15 +136,17 @@ com.englishapp/
 ├── vocab/      VocabEntry, VocabRepository, VocabMapper, VocabSeeder (loads seed/oxford_5000.csv on startup)
 ├── flashcard/  FlashcardDeck, UserCard, DeckRepository, CardRepository, FsrsScheduler (FSRS-4.5)
 │               DeckService, CardService, DeckController (/api/decks), CardController (/api/cards)
-├── video/      Video, SubtitleSegment, VideoVocab, VideoSummary
-├── pipeline/   Spring Batch — video processing jobs
-├── session/    LearningSession state machine (7 steps)
-├── flashcard/  FSRS algorithm
-├── shadow/     ShadowAttempt + phoneme scoring (CMU dict)
-├── retell/     RetellAttempt + GPT-4o-mini evaluation ★
-├── speak/      SpeakAttempt + AI evaluation
-├── ai/         AIOrchestrationService — tất cả OpenAI calls qua đây
-└── storage/    MinioStorageService (S3 abstraction)
+├── video/      Video (DRAFT/PROCESSING/PUBLISHED/FAILED), VideoRepository, VideoService
+│               AdminVideoController (/api/admin/videos — ADMIN only, multipart upload)
+│               VideoController (/api/videos — PUBLISHED only, presigned URL)
+├── storage/    StorageService (interface), S3StorageService (MinIO, path-style, auto-create buckets)
+├── pipeline/   (TODO BE-2.2+) async video processing
+├── session/    (TODO BE-3) LearningSession state machine (7 steps)
+├── shadow/     (TODO BE-4) ShadowAttempt + phoneme scoring (CMU dict)
+├── retell/     (TODO BE-5) RetellAttempt + GPT-4o-mini evaluation ★
+├── speak/      (TODO BE-5) SpeakAttempt + AI evaluation
+├── ai/         (TODO BE-2.3+) AIOrchestrationService — tất cả OpenAI calls qua đây
+└── recommend/  (TODO BE-6) content-based recommendation
 ```
 
 ### Request / data flow
@@ -166,6 +174,11 @@ WebSocket: @stomp/stompjs → /ws (STOMP) → WebSocketConfig
 - **AI calls:** KHÔNG gọi OpenAI trực tiếp trong service — phải qua `AIOrchestrationService`
 - **HTTP client:** WebClient ONLY — KHÔNG dùng RestTemplate
 - **Logging:** `@Slf4j` — KHÔNG dùng `System.out.println`
+- **Storage:** dùng `StorageService` interface — KHÔNG inject `S3Client` trực tiếp vào service
+- **Video ID:** Video entity KHÔNG dùng `@GeneratedValue` — tự generate `UUID.randomUUID()` trong service trước khi upload để dùng làm MinIO key (`videos/{uuid}/source.mp4`)
+- **Presigned URL:** expire 1 giờ — generate trong `VideoService.toResponse()`, KHÔNG lưu URL vào DB (chỉ lưu key)
+- **Admin role:** promote user bằng psql: `UPDATE users SET role='ADMIN' WHERE email='...';` rồi login lại lấy token mới
+- **@EnableMethodSecurity:** đã bật trong `SecurityConfig` — dùng `@PreAuthorize("hasRole('ADMIN')")` trên controller class/method
 
 ### Frontend
 - **API calls:** LUÔN qua React Query — KHÔNG gọi axios trực tiếp trong component
@@ -224,6 +237,11 @@ tasklist /FI "PID eq <pid>"   # nếu thấy postgres.exe → bị conflict
 **Triệu chứng:** `Migration checksum mismatch for migration version N`  
 **Root cause:** File `VN__.sql` bị sửa sau khi đã apply vào DB.  
 **Fix:** `docker compose down -v && docker compose up -d` (reset DB). Chạy từng lệnh riêng trong PowerShell — `&&` không hợp lệ trong PS 5.1.
+
+### BUG-5: VocabSeeder crash với duplicate CSV entries
+**Triệu chứng:** `duplicate key value violates unique constraint "idx_vocab_word_pos"` khi boot.  
+**Root cause:** File `oxford_5000.csv` có duplicate entries cho cùng `(word, part_of_speech)` (vd: `explain|verb`). `count() > 0` check chỉ bảo vệ khỏi re-seed toàn bộ, không xử lý duplicate trong file.  
+**Fix đã áp dụng:** `VocabSeeder` dùng `LinkedHashMap` với key `word|pos` + `putIfAbsent` để deduplicate trước khi `saveAll`.
 
 ### BUG-3: TypeScript `baseUrl` deprecated (TS 6+)
 **Triệu chứng:** `tsc -b` lỗi `Option 'baseUrl' is deprecated`.  
