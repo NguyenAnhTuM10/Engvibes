@@ -41,7 +41,7 @@ Warmup → Listen → Phrase Practice → Shadow (Whisper) → **Retell (AI coac
 | P-BE5-2 | Speak — speaking question, Whisper, LLM eval, rate limit | ✅ Done |
 | P-BE5-3 | Quick Review — cards from video, FSRS review | ✅ Done |
 | P-BE6-1 | Content-based recommendation engine | ✅ Done |
-| P-BE6-2 | Stats analytics + behavior events | ⏳ TODO |
+| P-BE6-2 | Stats analytics + behavior events | ✅ Done |
 | P-BE6-3 | WebSocket notifications + Rate limiting | ⏳ TODO |
 
 **Files đã tạo (backend):**
@@ -336,6 +336,11 @@ public Result processWithExternalService(UUID id) {
 | GET | `/api/recommend/videos?limit=10` | JWT | Content-based recommended videos |
 | GET | `/api/recommend/vocab-priority?limit=20` | JWT | Due cards sorted by phoneme/CEFR priority |
 | GET | `/api/recommend/daily-challenge` | JWT | Daily challenge: video + vocab + random phrase |
+| GET | `/api/stats/overview` | JWT | streak, xp, videosCompleted, vocabMastered, avgRetellScore7d |
+| GET | `/api/stats/weekly` | JWT | Last 7 days activity (minutes + byActivity breakdown) |
+| GET | `/api/stats/phonemes` | JWT | Phoneme error rates (min 5 attempts) |
+| GET | `/api/stats/vocab-growth` | JWT | Cumulative vocab count by CEFR over time |
+| POST | `/api/events` | JWT | Batch track user behavior events (async) |
 
 ### VideoResponse enrichment fields (có sau khi PUBLISHED)
 ```json

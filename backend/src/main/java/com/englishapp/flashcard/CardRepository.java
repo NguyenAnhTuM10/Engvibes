@@ -27,4 +27,9 @@ public interface CardRepository extends JpaRepository<UserCard, UUID> {
 
     @Query("SELECT c.vocab.cefrLevel, COUNT(c) FROM UserCard c WHERE c.userId = :userId GROUP BY c.vocab.cefrLevel")
     List<Object[]> countByUserIdGroupByCefrLevel(@Param("userId") UUID userId);
+
+    long countByUserIdAndStabilityGreaterThan(UUID userId, double stability);
+
+    @Query("SELECT c.createdAt, c.vocab.cefrLevel FROM UserCard c WHERE c.userId = :userId ORDER BY c.createdAt")
+    List<Object[]> findCreatedAtAndCefrByUserId(@Param("userId") UUID userId);
 }

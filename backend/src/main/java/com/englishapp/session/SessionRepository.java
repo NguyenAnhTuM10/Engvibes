@@ -4,6 +4,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -13,4 +14,5 @@ public interface SessionRepository extends JpaRepository<LearningSession, UUID> 
     Page<LearningSession> findByUserId(UUID userId, Pageable pageable);
     List<LearningSession> findTop10ByUserIdAndStatusOrderByCompletedAtDesc(UUID userId, SessionStatus status);
     long countByUserIdAndStatus(UUID userId, SessionStatus status);
+    List<LearningSession> findByUserIdAndStatusAndCompletedAtAfter(UUID userId, SessionStatus status, Instant after);
 }
