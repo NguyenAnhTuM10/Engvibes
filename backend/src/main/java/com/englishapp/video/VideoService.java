@@ -246,6 +246,10 @@ public class VideoService {
         }
     }
 
+    public VideoResponse toVideoResponse(Video video) {
+        return toResponse(video);
+    }
+
     private VideoResponse toResponse(Video video) {
         String videoUrl = null;
         if (video.getStorageUrl() != null) {

@@ -21,4 +21,10 @@ public interface CardRepository extends JpaRepository<UserCard, UUID> {
 
     @Query("SELECT c FROM UserCard c JOIN FETCH c.vocab WHERE c.userId = :userId AND c.sourceVideoId = :sourceVideoId")
     List<UserCard> findByUserIdAndSourceVideoId(@Param("userId") UUID userId, @Param("sourceVideoId") UUID sourceVideoId);
+
+    @Query("SELECT c FROM UserCard c JOIN FETCH c.vocab WHERE c.userId = :userId AND c.nextReview <= :now")
+    List<UserCard> findDueByUserId(@Param("userId") UUID userId, @Param("now") Instant now);
+
+    @Query("SELECT c.vocab.cefrLevel, COUNT(c) FROM UserCard c WHERE c.userId = :userId GROUP BY c.vocab.cefrLevel")
+    List<Object[]> countByUserIdGroupByCefrLevel(@Param("userId") UUID userId);
 }

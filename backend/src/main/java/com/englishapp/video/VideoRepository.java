@@ -9,11 +9,13 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.List;
 import java.util.UUID;
 
 public interface VideoRepository extends JpaRepository<Video, UUID>, JpaSpecificationExecutor<Video> {
 
     Page<Video> findByStatus(VideoStatus status, Pageable pageable);
+    List<Video> findAllByStatus(VideoStatus status);
 
     Page<Video> findByStatusAndCefrLevel(VideoStatus status, CEFRLevel cefrLevel, Pageable pageable);
 

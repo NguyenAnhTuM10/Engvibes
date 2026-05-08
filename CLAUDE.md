@@ -40,7 +40,9 @@ Warmup → Listen → Phrase Practice → Shadow (Whisper) → **Retell (AI coac
 | P-BE5-1 | Retell Coach — scaffold L1-L4, Whisper, LLM eval, rate limit | ✅ Done |
 | P-BE5-2 | Speak — speaking question, Whisper, LLM eval, rate limit | ✅ Done |
 | P-BE5-3 | Quick Review — cards from video, FSRS review | ✅ Done |
-| P-BE6+ | Recommendation engine | ⏳ TODO |
+| P-BE6-1 | Content-based recommendation engine | ✅ Done |
+| P-BE6-2 | Stats analytics + behavior events | ⏳ TODO |
+| P-BE6-3 | WebSocket notifications + Rate limiting | ⏳ TODO |
 
 **Files đã tạo (backend):**
 - `EnglishAppApplication.java`
@@ -177,7 +179,7 @@ com.englishapp/
 ├── shadow/     ShadowAttempt + WordDiffUtil + CmuDictService + PhonemeDetectionService + UserPhonemeStats
 ├── retell/     RetellAttempt + RetellService (scaffold L1-L4, Whisper, LLM eval) + RateLimitService (Redis INCR)
 ├── speak/      SpeakAttempt + SpeakController (Whisper + LLM eval, 50/day limit)
-└── recommend/  (TODO BE-6) content-based recommendation
+└── recommend/  UserVideoInteraction, UserFeatureService, ContentBasedRecommender, RecommendController
 ```
 
 ### Request / data flow
@@ -331,6 +333,9 @@ public Result processWithExternalService(UUID id) {
 | POST | `/api/sessions/{id}/speak/attempt` | JWT | Submit speak audio (Whisper + LLM eval, 50/day limit) |
 | GET | `/api/sessions/{id}/quick-review` | JWT | Cards added during this video session |
 | POST | `/api/sessions/{id}/quick-review/review/{cardId}` | JWT | Review a card (FSRS) |
+| GET | `/api/recommend/videos?limit=10` | JWT | Content-based recommended videos |
+| GET | `/api/recommend/vocab-priority?limit=20` | JWT | Due cards sorted by phoneme/CEFR priority |
+| GET | `/api/recommend/daily-challenge` | JWT | Daily challenge: video + vocab + random phrase |
 
 ### VideoResponse enrichment fields (có sau khi PUBLISHED)
 ```json

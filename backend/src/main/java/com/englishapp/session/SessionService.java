@@ -1,6 +1,7 @@
 package com.englishapp.session;
 
 import com.englishapp.common.ApiException;
+import com.englishapp.recommend.UserVideoInteractionRepository;
 import com.englishapp.session.dto.*;
 import com.englishapp.user.User;
 import com.englishapp.user.UserRepository;
@@ -31,6 +32,7 @@ public class SessionService {
     private final VideoRepository videoRepository;
     private final UserRepository userRepository;
     private final ObjectMapper objectMapper;
+    private final UserVideoInteractionRepository interactionRepository;
 
     private static final int XP_PER_STEP = 5;
 
@@ -96,6 +98,10 @@ public class SessionService {
         userRepository.save(user);
 
         log.info("Session {} finished — xp={}, streak={}", sessionId, saved.getTotalXpEarned(), user.getCurrentStreakDays());
+
+        double completionScore = Math.min(1.0, parseSteps(saved.getCompletedSteps()).size() / 7.0);
+        interactionRepository.upsert(userId, saved.getVideoId(), completionScore, Instant.now());
+
         return toResponse(saved);
     }
 
