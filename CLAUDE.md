@@ -42,7 +42,7 @@ Warmup → Listen → Phrase Practice → Shadow (Whisper) → **Retell (AI coac
 | P-BE5-3 | Quick Review — cards from video, FSRS review | ✅ Done |
 | P-BE6-1 | Content-based recommendation engine | ✅ Done |
 | P-BE6-2 | Stats analytics + behavior events | ✅ Done |
-| P-BE6-3 | WebSocket notifications + Rate limiting | ⏳ TODO |
+| P-BE6-3 | WebSocket notifications + Rate limiting | ✅ Done |
 
 **Files đã tạo (backend):**
 - `EnglishAppApplication.java`
@@ -250,9 +250,8 @@ VITE_WS_URL=ws://localhost:8080/ws
 ## Phiên tiếp theo — TODO & Context cần biết
 
 ### Việc cần làm ngay (theo thứ tự)
-1. **P-BE6: Recommendation engine** — content-based (CEFR match + topic similarity)
-2. **Frontend** — Bắt đầu xây UI: Auth, Video list, Learning session flow (7 bước)
-3. **Khi có OPENAI_API_KEY**: set vào `application-local.yml` → test pipeline thật với video tiếng Anh thật
+1. **Frontend** — Bắt đầu xây UI: Auth, Video list, Learning session flow (7 bước)
+2. **Khi có OPENAI_API_KEY**: set vào `application-local.yml` → test pipeline thật với video tiếng Anh thật
 
 ### Trạng thái test BE5 (quan trọng)
 Các endpoint **đã test** (không cần API key):
