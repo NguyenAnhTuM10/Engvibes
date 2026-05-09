@@ -43,6 +43,7 @@ Warmup → Listen → Phrase Practice → Shadow (Whisper) → **Retell (AI coac
 | P-BE6-1 | Content-based recommendation engine | ✅ Done |
 | P-BE6-2 | Stats analytics + behavior events | ✅ Done |
 | P-BE6-3 | WebSocket notifications + Rate limiting | ✅ Done |
+| P-BE7-1 | Demo seed + OpenAPI polish + README | ✅ Done |
 
 **Files đã tạo (backend):**
 - `EnglishAppApplication.java`
@@ -252,6 +253,12 @@ VITE_WS_URL=ws://localhost:8080/ws
 ### Việc cần làm ngay (theo thứ tự)
 1. **Frontend** — Bắt đầu xây UI: Auth, Video list, Learning session flow (7 bước)
 2. **Khi có OPENAI_API_KEY**: set vào `application-local.yml` → test pipeline thật với video tiếng Anh thật
+
+### Demo profile
+- Chạy: `java -jar backend/build/libs/backend-0.0.1-SNAPSHOT.jar --spring.profiles.active=local,demo`
+- Login demo: `demo@englishapp.com / demo123`
+- Login admin: `admin1@englishapp.com / admin123`
+- Seed: 40 videos, 13 users, 25 sessions, 100 cards, phoneme stats, 50 events
 
 ### Trạng thái test BE5 (quan trọng)
 Các endpoint **đã test** (không cần API key):
