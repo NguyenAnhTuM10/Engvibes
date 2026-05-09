@@ -11,6 +11,7 @@ import com.englishapp.user.CEFRLevel;
 import com.englishapp.user.UserService;
 import com.englishapp.video.dto.VideoResponse;
 import com.englishapp.video.subtitle.SubtitleRepository;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
@@ -19,6 +20,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.stream.Collectors;
 
+@Tag(name = "Recommendations", description = "Content-based video and vocab recommendations")
 @RestController
 @RequestMapping("/api/recommend")
 @RequiredArgsConstructor

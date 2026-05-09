@@ -26,6 +26,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+@io.swagger.v3.oas.annotations.tags.Tag(name = "Step 1 - Warmup", description = "Warmup vocabulary step")
 @Slf4j
 @RestController
 @RequestMapping("/api/sessions/{sessionId}/warmup")

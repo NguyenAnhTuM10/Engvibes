@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+@io.swagger.v3.oas.annotations.tags.Tag(name = "Analytics", description = "Learning stats and progress tracking")
 @RestController
 @RequestMapping("/api/stats")
 @RequiredArgsConstructor

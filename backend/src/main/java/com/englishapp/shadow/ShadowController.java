@@ -25,6 +25,7 @@ import java.io.ByteArrayInputStream;
 import java.util.*;
 import java.util.stream.Collectors;
 
+@io.swagger.v3.oas.annotations.tags.Tag(name = "Step 4 - Shadow", description = "Shadowing with phoneme weakness detection")
 @Slf4j
 @RestController
 @RequestMapping("/api/sessions/{sessionId}/shadow")

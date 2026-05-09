@@ -3,6 +3,7 @@ package com.englishapp.flashcard;
 import com.englishapp.common.ApiResponse;
 import com.englishapp.flashcard.dto.*;
 import com.englishapp.user.UserService;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -14,6 +15,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.UUID;
 
+@Tag(name = "Flashcard Decks", description = "Manage flashcard decks")
 @RestController
 @RequestMapping("/api/decks")
 @RequiredArgsConstructor

@@ -7,6 +7,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.time.Instant;
 import java.util.Map;
 
+@io.swagger.v3.oas.annotations.tags.Tag(name = "System", description = "Health check")
 @RestController
 @RequestMapping("/api")
 public class HealthController {

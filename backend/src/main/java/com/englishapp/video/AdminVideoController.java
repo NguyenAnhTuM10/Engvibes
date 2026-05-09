@@ -9,6 +9,7 @@ import com.englishapp.video.dto.VideoFilter;
 import com.englishapp.video.dto.VideoResponse;
 import com.englishapp.video.dto.VideoStatusResponse;
 import com.englishapp.video.subtitle.SubtitleService;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -23,6 +24,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.util.List;
 import java.util.UUID;
 
+@Tag(name = "Admin - Videos", description = "Video management (ADMIN only)")
 @RestController
 @RequestMapping("/api/admin/videos")
 @PreAuthorize("hasRole('ADMIN')")

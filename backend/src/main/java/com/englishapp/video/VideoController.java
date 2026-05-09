@@ -6,6 +6,7 @@ import com.englishapp.video.dto.SubtitleSegmentResponse;
 import com.englishapp.video.dto.VideoFilter;
 import com.englishapp.video.dto.VideoResponse;
 import com.englishapp.video.subtitle.SubtitleService;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -15,6 +16,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.UUID;
 
+@Tag(name = "Videos", description = "Browse published videos")
 @RestController
 @RequestMapping("/api/videos")
 @RequiredArgsConstructor

@@ -3,6 +3,7 @@ package com.englishapp.session;
 import com.englishapp.common.ApiResponse;
 import com.englishapp.session.dto.*;
 import com.englishapp.user.UserService;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -13,6 +14,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.UUID;
 
+@Tag(name = "Learning Sessions", description = "Create and manage 7-step learning sessions")
 @RestController
 @RequestMapping("/api/sessions")
 @RequiredArgsConstructor

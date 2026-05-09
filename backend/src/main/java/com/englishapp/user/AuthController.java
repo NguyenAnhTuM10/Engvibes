@@ -4,11 +4,14 @@ import com.englishapp.common.ApiResponse;
 import com.englishapp.user.dto.AuthResponse;
 import com.englishapp.user.dto.LoginRequest;
 import com.englishapp.user.dto.RegisterRequest;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
+@Tag(name = "Authentication", description = "Register and login")
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor

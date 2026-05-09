@@ -5,6 +5,7 @@ import com.englishapp.flashcard.dto.CardResponse;
 import com.englishapp.flashcard.dto.CreateCardRequest;
 import com.englishapp.flashcard.dto.ReviewCardRequest;
 import com.englishapp.user.UserService;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -12,6 +13,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.UUID;
 
+@Tag(name = "Flashcard Cards", description = "Manage cards and FSRS review")
 @RestController
 @RequestMapping("/api/cards")
 @RequiredArgsConstructor

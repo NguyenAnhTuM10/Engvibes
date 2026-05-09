@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.UUID;
 
+@io.swagger.v3.oas.annotations.tags.Tag(name = "Step 7 - Quick Review", description = "FSRS flashcard review for video vocabulary")
 @RestController
 @RequestMapping("/api/sessions/{sessionId}/quick-review")
 @RequiredArgsConstructor

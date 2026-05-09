@@ -29,6 +29,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+@io.swagger.v3.oas.annotations.tags.Tag(name = "Step 6 - Speak", description = "Free speaking with LLM feedback")
 @Slf4j
 @RestController
 @RequestMapping("/api/sessions/{sessionId}/speak")

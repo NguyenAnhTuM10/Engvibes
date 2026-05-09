@@ -25,6 +25,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.ByteArrayInputStream;
 import java.util.*;
 
+@io.swagger.v3.oas.annotations.tags.Tag(name = "Step 3 - Phrase Practice", description = "Whisper-scored phrase pronunciation practice")
 @Slf4j
 @RestController
 @RequestMapping("/api/sessions/{sessionId}/phrases")

@@ -13,6 +13,7 @@ import com.englishapp.video.subtitle.SubtitleService;
 import com.englishapp.vocab.VocabMapper;
 import com.englishapp.vocab.VocabRepository;
 import com.englishapp.vocab.dto.VocabResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -20,6 +21,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.UUID;
 
+@Tag(name = "Step 2 - Listen", description = "Listen step — subtitles and vocab lookup")
 @RestController
 @RequestMapping("/api/sessions/{sessionId}/listen")
 @RequiredArgsConstructor
