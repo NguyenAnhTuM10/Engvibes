@@ -3,6 +3,9 @@ package com.englishapp.pipeline;
 import com.englishapp.ai.AIOrchestrationService;
 import com.englishapp.ai.dto.VideoEnrichment;
 import com.englishapp.ai.dto.VideoSummary;
+import com.englishapp.notification.NotificationMessage;
+import com.englishapp.notification.NotificationService;
+import com.englishapp.notification.NotificationType;
 import com.englishapp.storage.StorageService;
 import com.englishapp.video.Video;
 import com.englishapp.video.VideoService;
@@ -16,6 +19,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
@@ -28,6 +32,7 @@ public class VideoProcessingPipeline {
     private final StorageService storageService;
     private final SubtitleService subtitleService;
     private final AIOrchestrationService aiOrchestrationService;
+    private final NotificationService notificationService;
 
     @Value("${app.storage.bucket-audios}")
     private String audiosBucket;
@@ -57,9 +62,21 @@ public class VideoProcessingPipeline {
 
             videoService.setVideoStatus(videoId, VideoStatus.PUBLISHED, null);
             log.info("[{}] Pipeline done — video {} is PUBLISHED", Thread.currentThread().getName(), videoId);
+            notificationService.sendToAdmins(NotificationMessage.builder()
+                    .type(NotificationType.VIDEO_PUBLISHED)
+                    .title("Video published")
+                    .message("Video " + videoId + " is now published")
+                    .data(Map.of("videoId", videoId.toString()))
+                    .build());
         } catch (Exception e) {
             log.error("[{}] Pipeline failed for video {}: {}", Thread.currentThread().getName(), videoId, e.getMessage());
             videoService.setVideoStatus(videoId, VideoStatus.FAILED, e.getMessage());
+            notificationService.sendToAdmins(NotificationMessage.builder()
+                    .type(NotificationType.VIDEO_FAILED)
+                    .title("Video processing failed")
+                    .message("Video " + videoId + " failed: " + e.getMessage())
+                    .data(Map.of("videoId", videoId.toString()))
+                    .build());
         }
 
         return CompletableFuture.completedFuture(null);

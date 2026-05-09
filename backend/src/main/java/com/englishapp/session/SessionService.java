@@ -1,6 +1,9 @@
 package com.englishapp.session;
 
 import com.englishapp.common.ApiException;
+import com.englishapp.notification.NotificationMessage;
+import com.englishapp.notification.NotificationService;
+import com.englishapp.notification.NotificationType;
 import com.englishapp.recommend.UserVideoInteractionRepository;
 import com.englishapp.session.dto.*;
 import com.englishapp.user.User;
@@ -20,6 +23,8 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 @Slf4j
@@ -33,8 +38,11 @@ public class SessionService {
     private final UserRepository userRepository;
     private final ObjectMapper objectMapper;
     private final UserVideoInteractionRepository interactionRepository;
+    private final NotificationService notificationService;
 
     private static final int XP_PER_STEP = 5;
+    private static final Set<Integer> XP_MILESTONES = Set.of(100, 500, 1000, 5000);
+    private static final Set<Integer> STREAK_MILESTONES = Set.of(3, 7, 14, 30);
 
     public SessionResponse getOrCreateSession(UUID userId, UUID videoId) {
         var video = videoRepository.findById(videoId)
@@ -93,11 +101,15 @@ public class SessionService {
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> ApiException.notFound("User not found"));
-        user.setTotalXp(user.getTotalXp() + saved.getTotalXpEarned());
+        int xpBefore = user.getTotalXp();
+        int streakBefore = user.getCurrentStreakDays();
+        user.setTotalXp(xpBefore + saved.getTotalXpEarned());
         updateStreak(user);
         userRepository.save(user);
 
         log.info("Session {} finished — xp={}, streak={}", sessionId, saved.getTotalXpEarned(), user.getCurrentStreakDays());
+
+        sendMilestoneNotifications(userId, xpBefore, user.getTotalXp(), streakBefore, user.getCurrentStreakDays());
 
         double completionScore = Math.min(1.0, parseSteps(saved.getCompletedSteps()).size() / 7.0);
         interactionRepository.upsert(userId, saved.getVideoId(), completionScore, Instant.now());
@@ -108,6 +120,27 @@ public class SessionService {
     @Transactional(readOnly = true)
     public Page<SessionResponse> getHistory(UUID userId, Pageable pageable) {
         return sessionRepository.findByUserId(userId, pageable).map(this::toResponse);
+    }
+
+    private void sendMilestoneNotifications(UUID userId, int xpBefore, int xpAfter, int streakBefore, int streakAfter) {
+        for (int milestone : XP_MILESTONES) {
+            if (xpBefore < milestone && xpAfter >= milestone) {
+                notificationService.sendToUser(userId, NotificationMessage.builder()
+                        .type(NotificationType.ACHIEVEMENT_UNLOCKED)
+                        .title("Achievement unlocked!")
+                        .message("You've reached " + milestone + " XP!")
+                        .data(Map.of("xp", milestone))
+                        .build());
+            }
+        }
+        if (STREAK_MILESTONES.contains(streakAfter) && streakAfter > streakBefore) {
+            notificationService.sendToUser(userId, NotificationMessage.builder()
+                    .type(NotificationType.STREAK_UPDATED)
+                    .title("Streak milestone!")
+                    .message("You're on a " + streakAfter + "-day streak!")
+                    .data(Map.of("streak", streakAfter))
+                    .build());
+        }
     }
 
     private void updateStreak(User user) {
