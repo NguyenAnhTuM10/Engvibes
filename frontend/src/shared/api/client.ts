@@ -1,13 +1,10 @@
 import axios from 'axios'
 
-const apiClient = axios.create({
+export const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL,
+  timeout: 30_000,
   headers: { 'Content-Type': 'application/json' },
 })
 
-apiClient.interceptors.response.use(
-  (response) => response.data,
-  (error) => Promise.reject(error),
-)
-
-export default apiClient
+// Interceptors are set up in main.tsx after auth store is ready to avoid circular deps
+export default api
