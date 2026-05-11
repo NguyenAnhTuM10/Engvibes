@@ -1,6 +1,8 @@
 package com.englishapp.vocab;
 
 import com.englishapp.user.CEFRLevel;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
@@ -12,5 +14,6 @@ public interface VocabRepository extends JpaRepository<VocabEntry, UUID> {
     List<VocabEntry> findByCefrLevel(CEFRLevel cefrLevel);
     boolean existsByWord(String word);
     List<VocabEntry> findByWordIn(List<String> words);
-    java.util.Optional<VocabEntry> findFirstByWordIgnoreCase(String word);
+    Optional<VocabEntry> findFirstByWordIgnoreCase(String word);
+    Page<VocabEntry> findByWordContainingIgnoreCase(String word, Pageable pageable);
 }

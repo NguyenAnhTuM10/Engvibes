@@ -13,6 +13,7 @@ const ProgressPage = lazy(() => import('@/pages/ProgressPage'))
 const HistoryPage = lazy(() => import('@/pages/HistoryPage'))
 const ProfilePage = lazy(() => import('@/pages/ProfilePage'))
 const AdminVideosPage = lazy(() => import('@/pages/AdminVideosPage'))
+const DeckDetailPage = lazy(() => import('@/pages/DeckDetailPage'))
 
 function PageLoader() {
   return (
@@ -46,6 +47,7 @@ const router = createBrowserRouter([
       { index: true, element: <Wrap><HomePage /></Wrap> },
       { path: 'videos', element: <Wrap><VideosPage /></Wrap> },
       { path: 'decks', element: <Wrap><DecksPage /></Wrap> },
+      { path: 'decks/:id', element: <Wrap><DeckDetailPage /></Wrap> },
       { path: 'progress', element: <Wrap><ProgressPage /></Wrap> },
       { path: 'history', element: <Wrap><HistoryPage /></Wrap> },
       { path: 'profile', element: <Wrap><ProfilePage /></Wrap> },
