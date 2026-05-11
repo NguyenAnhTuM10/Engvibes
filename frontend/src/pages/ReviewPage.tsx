@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -6,7 +6,6 @@ import CardReview from '@/features/flashcard/components/CardReview'
 import ReviewCompleteScreen from '@/features/flashcard/components/ReviewCompleteScreen'
 import { useDecks, useDueCards, useReviewCard } from '@/features/flashcard/api'
 import { useKeyboard } from '@/shared/hooks/useKeyboard'
-import type { Card } from '@/shared/types/api'
 
 interface ReviewStats {
   total: number
@@ -16,6 +15,8 @@ interface ReviewStats {
   easy: number
 }
 
+const EMPTY_STATS: ReviewStats = { total: 0, again: 0, hard: 0, good: 0, easy: 0 }
+
 export default function ReviewPage() {
   const { id: deckId } = useParams<{ id: string }>()
   const navigate = useNavigate()
@@ -24,23 +25,14 @@ export default function ReviewPage() {
   const { data: dueCards = [], isLoading } = useDueCards(deckId!)
   const reviewCard = useReviewCard()
 
-  const [queue, setQueue] = useState<Card[] | null>(null)
   const [currentIndex, setCurrentIndex] = useState(0)
-  const [stats, setStats] = useState<ReviewStats>({ total: 0, again: 0, hard: 0, good: 0, easy: 0 })
+  const [stats, setStats] = useState<ReviewStats>(EMPTY_STATS)
   const [done, setDone] = useState(false)
   const [confirmExit, setConfirmExit] = useState(false)
 
-  // Initialize queue once data loads
-  const initializedRef = useRef(false)
-  if (!initializedRef.current && dueCards.length > 0) {
-    setQueue([...dueCards])
-    initializedRef.current = true
-  }
-
   const deck = decks.find((d) => d.id === deckId)
-  const activeQueue = queue ?? dueCards
-  const currentCard = activeQueue[currentIndex]
-  const total = activeQueue.length
+  const total = dueCards.length
+  const currentCard = dueCards[currentIndex]
 
   const handleRate = useCallback(
     (rating: 1 | 2 | 3 | 4) => {
@@ -77,7 +69,7 @@ export default function ReviewPage() {
     )
   }
 
-  if (dueCards.length === 0) {
+  if (!isLoading && dueCards.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
         <p className="text-xl font-semibold">No cards due</p>
@@ -88,7 +80,7 @@ export default function ReviewPage() {
   }
 
   if (done) {
-    return <ReviewCompleteScreen deckId={deckId!} stats={{ ...stats, total: total }} />
+    return <ReviewCompleteScreen deckId={deckId!} stats={{ ...stats, total }} />
   }
 
   return (
@@ -129,7 +121,7 @@ export default function ReviewPage() {
         />
       )}
 
-      {/* Exit confirm dialog */}
+      {/* Exit confirm */}
       {confirmExit && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="bg-background rounded-lg shadow-xl p-6 w-full max-w-xs mx-4 text-center">

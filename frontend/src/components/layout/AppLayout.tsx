@@ -14,7 +14,7 @@ import {
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
-import { Sheet, SheetContent } from '@/components/ui/sheet'
+import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
 import AppHeader from './AppHeader'
 import { useAuthStore } from '@/features/auth/store'
 
@@ -105,6 +105,7 @@ export default function AppLayout() {
       {/* Mobile sidebar drawer */}
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
         <SheetContent side="left" className="w-60 p-0">
+          <SheetTitle className="sr-only">Navigation menu</SheetTitle>
           <div className="flex items-center h-14 px-4 border-b">
             <span className="font-bold text-sm">English Learning</span>
           </div>
