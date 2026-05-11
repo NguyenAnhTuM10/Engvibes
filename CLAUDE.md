@@ -44,6 +44,7 @@ Warmup → Listen → Phrase Practice → Shadow (Whisper) → **Retell (AI coac
 | P-BE6-2 | Stats analytics + behavior events | ✅ Done |
 | P-BE6-3 | WebSocket notifications + Rate limiting | ✅ Done |
 | P-BE7-1 | Demo seed + OpenAPI polish + README | ✅ Done |
+| P-FE1-1 | Auth UI (Login + Register) + JWT store + AuthGuard | ✅ Done |
 
 **Files đã tạo (backend):**
 - `EnglishAppApplication.java`
@@ -73,10 +74,18 @@ Warmup → Listen → Phrase Practice → Shadow (Whisper) → **Retell (AI coac
 - `seed/oxford_5000.csv` — ~300 từ mẫu pipe-separated `word|cefr_level|pos|ipa|phonemes|definition`
 
 **Files đã tạo (frontend):**
-- `src/app/`: `App.tsx`, `providers.tsx` (QueryClient + Router), `router.tsx`
-- `src/pages/HomePage.tsx` — gọi `/api/health` và hiện status
-- `src/shared/api/client.ts` — axios instance, auto-unwrap `response.data`
-- `src/shared/lib/utils.ts` — `cn()` helper
+- `src/app/`: `App.tsx`, `providers.tsx` (QueryClient + Router + ThemeProvider + Toaster), `router.tsx` (lazy routes)
+- `src/lib/utils.ts` — `cn()` cho shadcn (alias `@/lib/utils`)
+- `src/shared/lib/utils.ts` — `cn()` helper (legacy)
+- `src/shared/api/client.ts` — axios instance; interceptors đặt ở module-level trong providers.tsx
+- `src/shared/types/api.ts` — `User`, `AuthResponse`, `LoginData`, `RegisterData`, `ApiResponse<T>`
+- `src/features/auth/store.ts` — Zustand persist store (localStorage `auth-storage`): `token`, `user`, `setAuth`, `logout`, `isAuthenticated`
+- `src/features/auth/api.ts` — `useLogin`, `useRegister`, `useLogout`, `useCurrentUser` (React Query)
+- `src/components/AuthGuard.tsx` — redirect `/login` nếu chưa auth
+- `src/components/ui/` — shadcn default style: `button`, `card`, `input`, `label`, `select`, `alert`, `form`, `sonner`
+- `src/pages/LoginPage.tsx` — Login form (RHF + zod)
+- `src/pages/RegisterPage.tsx` — Register form + CEFR Select
+- `src/pages/HomePage.tsx` — Welcome + stat cards + action cards
 
 ---
 
@@ -251,8 +260,10 @@ VITE_WS_URL=ws://localhost:8080/ws
 ## Phiên tiếp theo — TODO & Context cần biết
 
 ### Việc cần làm ngay (theo thứ tự)
-1. **Frontend** — Bắt đầu xây UI: Auth, Video list, Learning session flow (7 bước)
-2. **Khi có OPENAI_API_KEY**: set vào `application-local.yml` → test pipeline thật với video tiếng Anh thật
+1. **P-FE1-2** — Main layout + Sidebar navigation (AppLayout, AppHeader, placeholder pages)
+2. **P-FE1-3** — Vocab search + Deck list + Deck detail page
+3. **P-FE1-4** — Flashcard Review session UI (card flip + FSRS rating)
+4. **Khi có OPENAI_API_KEY**: set vào `application-local.yml` → test pipeline thật với video tiếng Anh thật
 
 ### Demo profile
 - Chạy: `java -jar backend/build/libs/backend-0.0.1-SNAPSHOT.jar --spring.profiles.active=local,demo`
@@ -433,6 +444,12 @@ tasklist /FI "PID eq <pid>"   # nếu thấy postgres.exe → bị conflict
 **Root cause:** `UserCard.vocab` là `@ManyToOne(fetch = FetchType.LAZY)` — khi controller gọi `cardRepository.findByUserIdAndSourceVideoId()` rồi stream-map qua MapStruct, JPA session đã đóng nên proxy không load được.  
 **Fix đã áp dụng:** Thay Spring Data method name bằng `@Query("SELECT c FROM UserCard c JOIN FETCH c.vocab WHERE ...")` — buộc eager load vocab trong cùng một query.  
 **Pattern cần nhớ:** Bất kỳ query nào trả `List<Entity>` mà entity có LAZY relation và sẽ được access ngay sau đó (không trong @Transactional) → dùng `JOIN FETCH` trong @Query.
+
+### BUG-8: shadcn `base-nova` style tạo file sai thư mục + thiếu `@base-ui/react`
+**Triệu chứng:** `npx shadcn@latest add ...` tạo files vào `frontend/@/components/ui/` thay vì `frontend/src/components/ui/`; import dùng `@base-ui/react/button` nhưng package chưa install.  
+**Root cause:** (1) shadcn CLI trên Windows không resolve alias `@` → `src/` khi `components.json` dùng `@/components`. (2) `base-nova` style mới yêu cầu `@base-ui/react` chưa có trong registry auto-install.  
+**Fix đã áp dụng:** Đổi `"style": "base-nova"` → `"style": "default"` trong `components.json`; đổi aliases thành `"components": "src/components"` rồi sau khi add xong đổi lại về `@/` (để imports trong components dùng `@/lib/utils`). Nếu components tạo `"src/lib/utils"` literal thì dùng `sed` fix thành `"@/lib/utils"`.  
+**Pattern cần nhớ khi `shadcn add` lần sau:** Sau khi add, chạy `grep -rn "from \"src/"` trong `src/components/ui/` và fix về `@/` nếu có.
 
 ---
 
