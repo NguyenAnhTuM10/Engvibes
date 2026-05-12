@@ -3,7 +3,6 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { ArrowLeft, BookOpen, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react'
 import PageHeader from '@/components/ui/PageHeader'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { useDecks, useDeckCards, useDeleteCard } from '@/features/flashcard/api'
 import type { Card as FlashCard } from '@/shared/types/api'
@@ -64,7 +63,7 @@ export default function DeckDetailPage() {
         <>
           <div className="space-y-2">
             {cardsPage.content.map((card) => (
-              <CardItem key={card.id} card={card} deckId={id} />
+              <CardItem key={card.id} card={card} />
             ))}
           </div>
 
@@ -97,7 +96,7 @@ export default function DeckDetailPage() {
   )
 }
 
-function CardItem({ card, deckId }: { card: FlashCard; deckId: string }) {
+function CardItem({ card }: { card: FlashCard }) {
   const deleteCard = useDeleteCard()
 
   const nextReview = card.nextReview

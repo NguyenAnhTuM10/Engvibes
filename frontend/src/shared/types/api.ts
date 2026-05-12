@@ -81,3 +81,92 @@ export interface Card {
   sourceVideoId: string | null
   sourceType: CardSource | null
 }
+
+// ── Video ────────────────────────────────────────────────────────────────────
+
+export type VideoStatus = 'DRAFT' | 'PROCESSING' | 'PUBLISHED' | 'FAILED'
+
+export interface WarmupWord {
+  word: string
+  ipa: string
+  definition: string
+  cefrLevel: CefrLevel
+  partOfSpeech: string
+}
+
+export interface Video {
+  id: string
+  title: string
+  description?: string
+  thumbnailUrl: string | null
+  videoUrl: string | null
+  durationSec: number
+  cefrLevel: CefrLevel
+  topic: string
+  status: VideoStatus
+  viewCount: number
+  summary?: string | null
+  keyPoints?: string[] | null
+  speakingQuestion?: string | null
+  warmupWords?: WarmupWord[] | null
+  collocations?: Record<string, string[]> | null
+}
+
+export interface VideoFilter {
+  cefrLevel?: CefrLevel
+  topic?: string
+  search?: string
+  page?: number
+  size?: number
+}
+
+export interface SubtitleWord {
+  word: string
+  startMs: number
+  endMs: number
+}
+
+export interface SubtitleSegment {
+  id: string
+  orderIndex: number
+  startMs: number
+  endMs: number
+  text: string
+  words?: SubtitleWord[] | null
+}
+
+// ── Session ──────────────────────────────────────────────────────────────────
+
+export type SessionStatus = 'IN_PROGRESS' | 'COMPLETED' | 'ABANDONED'
+
+export interface Session {
+  id: string
+  videoId: string
+  status: SessionStatus
+  currentStep: number
+  scaffoldLevel: number | null
+  totalXpEarned: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface WarmupWordResponse {
+  vocabId: string
+  word: string
+  ipa: string | null
+  definition: string | null
+  cefrLevel: CefrLevel | null
+  partOfSpeech: string | null
+}
+
+export interface SessionHistoryItem {
+  id: string
+  videoId: string
+  videoTitle: string
+  videoThumbnailUrl: string | null
+  status: SessionStatus
+  currentStep: number
+  totalXpEarned: number
+  createdAt: string
+  updatedAt: string
+}

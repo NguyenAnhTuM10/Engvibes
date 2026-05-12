@@ -1,5 +1,3 @@
-import { Button } from '@/components/ui/button'
-
 const RATINGS = [
   { value: 1 as const, label: 'Again', hint: '<1 min', className: 'border-red-300 text-red-600 hover:bg-red-50 hover:border-red-400' },
   { value: 2 as const, label: 'Hard',  hint: '~1 day', className: 'border-orange-300 text-orange-600 hover:bg-orange-50 hover:border-orange-400' },

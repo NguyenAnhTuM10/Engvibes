@@ -15,6 +15,7 @@ const ProfilePage = lazy(() => import('@/pages/ProfilePage'))
 const AdminVideosPage = lazy(() => import('@/pages/AdminVideosPage'))
 const DeckDetailPage = lazy(() => import('@/pages/DeckDetailPage'))
 const ReviewPage = lazy(() => import('@/pages/ReviewPage'))
+const VideoSessionPage = lazy(() => import('@/pages/VideoSessionPage'))
 
 function PageLoader() {
   return (
@@ -36,6 +37,14 @@ const router = createBrowserRouter([
   {
     path: '/register',
     element: <Wrap><RegisterPage /></Wrap>,
+  },
+  {
+    path: '/session/:videoId',
+    element: (
+      <AuthGuard>
+        <Wrap><VideoSessionPage /></Wrap>
+      </AuthGuard>
+    ),
   },
   {
     path: '/',

@@ -1,7 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import { Flame, BookOpen, Play, Trophy } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
 import PageHeader from '@/components/ui/PageHeader'
 import { useCurrentUser } from '@/features/auth/api'
 import { useAuthStore } from '@/features/auth/store'
