@@ -170,3 +170,24 @@ export interface SessionHistoryItem {
   createdAt: string
   updatedAt: string
 }
+
+// ── Phrase / Shadow ───────────────────────────────────────────────────────────
+
+export type WordMatchStatus = 'MATCH' | 'MISSING' | 'EXTRA' | 'MISPRONOUNCED'
+
+export interface WordMatch {
+  word: string
+  status: WordMatchStatus
+}
+
+export interface PhraseAttemptResult {
+  transcript: string
+  wordMatches: WordMatch[]
+  score: number
+  attemptNumber: number
+  maxAttempts: number
+}
+
+export interface ShadowAttemptResult extends PhraseAttemptResult {
+  weakPhonemes: string[]
+}

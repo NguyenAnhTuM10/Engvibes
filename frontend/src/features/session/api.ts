@@ -4,8 +4,10 @@ import api from '@/shared/api/client'
 import type {
   ApiResponse,
   Page,
+  PhraseAttemptResult,
   Session,
   SessionHistoryItem,
+  ShadowAttemptResult,
   SubtitleSegment,
   Vocab,
   WarmupWordResponse,
@@ -147,3 +149,39 @@ export const useAddVocabFromListen = (sessionId: string) => {
     onError: (err: Error) => toast.error(err.message),
   })
 }
+
+// ── Phrase Practice ───────────────────────────────────────────────────────────
+
+export const useSubmitPhraseAttempt = (sessionId: string) =>
+  useMutation({
+    mutationFn: ({ segmentIdx, audio }: { segmentIdx: number; audio: Blob }) => {
+      const form = new FormData()
+      form.append('audio', audio, 'recording.webm')
+      return api
+        .post<never, ApiResponse<PhraseAttemptResult>>(
+          `/api/sessions/${sessionId}/phrase/${segmentIdx}/attempt`,
+          form,
+          { headers: { 'Content-Type': 'multipart/form-data' } },
+        )
+        .then((r) => r.data)
+    },
+    onError: (err: Error) => toast.error(err.message),
+  })
+
+// ── Shadow ────────────────────────────────────────────────────────────────────
+
+export const useSubmitShadowAttempt = (sessionId: string) =>
+  useMutation({
+    mutationFn: ({ segmentIdx, audio }: { segmentIdx: number; audio: Blob }) => {
+      const form = new FormData()
+      form.append('audio', audio, 'recording.webm')
+      return api
+        .post<never, ApiResponse<ShadowAttemptResult>>(
+          `/api/sessions/${sessionId}/shadow/${segmentIdx}/attempt`,
+          form,
+          { headers: { 'Content-Type': 'multipart/form-data' } },
+        )
+        .then((r) => r.data)
+    },
+    onError: (err: Error) => toast.error(err.message),
+  })

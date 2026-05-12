@@ -8,6 +8,8 @@ import { useSessionStore } from '@/features/session/store'
 import StepNavigator from '@/features/session/components/StepNavigator'
 import WarmupStep from '@/features/session/steps/WarmupStep'
 import ListenStep from '@/features/session/steps/ListenStep'
+import PhraseStep from '@/features/session/steps/PhraseStep'
+import ShadowStep from '@/features/session/steps/ShadowStep'
 
 function ExitDialog({ onConfirm, onCancel }: { onConfirm: () => void; onCancel: () => void }) {
   return (
@@ -145,6 +147,10 @@ export default function VideoSessionPage() {
             videoUrl={video?.videoUrl ?? ''}
             onComplete={handleAdvance}
           />
+        ) : currentStep === 2 ? (
+          <PhraseStep sessionId={sessionId} onComplete={handleAdvance} />
+        ) : currentStep === 3 ? (
+          <ShadowStep sessionId={sessionId} onComplete={handleAdvance} />
         ) : (
           <StepPlaceholder step={currentStep} onSkip={handleAdvance} />
         )}
