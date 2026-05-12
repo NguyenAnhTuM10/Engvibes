@@ -105,6 +105,7 @@ export interface Video {
   topic: string
   status: VideoStatus
   viewCount: number
+  createdAt?: string
   summary?: string | null
   keyPoints?: string[] | null
   speakingQuestion?: string | null
