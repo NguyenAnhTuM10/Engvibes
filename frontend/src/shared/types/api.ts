@@ -246,3 +246,41 @@ export interface SpeakFeedback {
   improvementTips: string[]
   modelAnswer: string
 }
+
+// ── Stats ─────────────────────────────────────────────────────────────────────
+
+export interface OverviewStats {
+  streak: number
+  totalXp: number
+  videosCompleted: number
+  vocabMastered: number
+  avgRetellScore7d: number | null
+}
+
+export interface DailyActivity {
+  date: string
+  totalMinutes: number
+  byActivity: Record<string, number>
+}
+
+export interface WeeklyStats {
+  days: DailyActivity[]
+}
+
+export interface PhonemeStats {
+  phoneme: string
+  errorRate: number
+  totalAttempts: number
+}
+
+export interface VocabGrowthPoint {
+  date: string
+  byLevel: Partial<Record<CefrLevel, number>>
+}
+
+export interface DailyChallenge {
+  videoId: string
+  videoTitle: string
+  vocabToReview: number
+  randomPhrase?: string | null
+}

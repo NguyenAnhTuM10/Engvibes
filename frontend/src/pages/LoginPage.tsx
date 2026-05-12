@@ -75,6 +75,34 @@ export default function LoginPage() {
               Register
             </Link>
           </p>
+
+          {import.meta.env.DEV && (
+            <div className="mt-4 pt-4 border-t">
+              <p className="text-xs text-center text-muted-foreground mb-2">Demo accounts</p>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="flex-1 text-xs"
+                  onClick={() => login.mutate({ email: 'demo@englishapp.com', password: 'demo123' })}
+                  disabled={login.isPending}
+                >
+                  Login as Demo
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="flex-1 text-xs"
+                  onClick={() => login.mutate({ email: 'admin1@englishapp.com', password: 'admin123' })}
+                  disabled={login.isPending}
+                >
+                  Login as Admin
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

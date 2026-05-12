@@ -61,3 +61,20 @@ export const useCurrentUser = () => {
     staleTime: 5 * 60_000,
   })
 }
+
+export const useUpdateUser = () => {
+  const qc = useQueryClient()
+  const { setAuth } = useAuthStore()
+
+  return useMutation({
+    mutationFn: (data: { username?: string; cefrLevel?: string }) =>
+      api.patch<never, { data: User }>('/api/me', data).then((r) => r.data),
+    onSuccess: (user) => {
+      qc.setQueryData(['me'], user)
+      const token = useAuthStore.getState().token
+      if (token) setAuth(token, user)
+      toast.success('Profile updated')
+    },
+    onError: (err: Error) => toast.error(err.message),
+  })
+}
