@@ -22,7 +22,20 @@ api.interceptors.request.use((config) => {
 })
 
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    // Backend luôn trả ApiResponse<T> = { data, message, timestamp }
+    // Auto-unwrap để tất cả .then(r => r.data) lấy được T trực tiếp
+    const body = response.data
+    if (
+      body !== null &&
+      typeof body === 'object' &&
+      'data' in body &&
+      'timestamp' in body
+    ) {
+      response.data = body.data
+    }
+    return response
+  },
   (error) => {
     const status = error.response?.status
     if (status === 401) {
