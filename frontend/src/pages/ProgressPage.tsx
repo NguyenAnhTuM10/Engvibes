@@ -1,15 +1,7 @@
 import { format, parseISO } from 'date-fns'
 import {
-  BarChart,
-  Bar,
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  Legend,
+  BarChart, Bar, LineChart, Line,
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts'
 import { Flame, Trophy, BookOpen, Mic } from 'lucide-react'
 import PageHeader from '@/components/ui/PageHeader'
@@ -26,45 +18,36 @@ const ACTIVITY_COLORS: Record<string, string> = {
 function StatCard({ icon, label, value, sub }: { icon: React.ReactNode; label: string; value: string | number; sub?: string }) {
   return (
     <div className="border rounded-xl p-4">
-      <div className="flex items-center gap-2 mb-1">
-        {icon}
-        <span className="text-xs text-muted-foreground">{label}</span>
-      </div>
+      <div className="flex items-center gap-2 mb-1">{icon}<span className="text-xs text-muted-foreground">{label}</span></div>
       <p className="text-2xl font-bold">{value}</p>
       {sub && <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>}
     </div>
   )
 }
 
-
 export default function ProgressPage() {
   const { data: overview, isLoading: oLoading } = useOverviewStats()
-  const { data: weekly, isLoading: wLoading } = useWeeklyActivity()
+  const { data: weeklyArr, isLoading: wLoading } = useWeeklyActivity()
   const { data: phonemes } = usePhonemeStats()
-  const { data: vocabGrowth } = useVocabGrowth()
+  const { data: vocabGrowthMap } = useVocabGrowth()
 
-  // Transform weekly data for recharts
-  const weeklyData = weekly?.days.map((d) => {
-    const activities = Object.fromEntries(
-      Object.entries(d.byActivity).map(([k, v]) => [k.toLowerCase(), v]),
-    )
-    return {
-      date: format(parseISO(d.date), 'EEE'),
-      ...activities,
-      total: d.totalMinutes,
-    }
-  }) ?? []
-
-  const activityKeys = weekly?.days.length
-    ? [...new Set(weekly.days.flatMap((d) => Object.keys(d.byActivity).map((k) => k.toLowerCase())))]
+  // weekly: DailyActivity[] thẳng từ backend
+  const weeklyData = (weeklyArr ?? []).map((d) => ({
+    date: format(parseISO(d.date), 'EEE'),
+    ...d.byActivity,
+    total: d.totalMinutes,
+  }))
+  const activityKeys = weeklyArr?.length
+    ? [...new Set(weeklyArr.flatMap((d) => Object.keys(d.byActivity)))]
     : []
 
-  // Transform vocab growth for recharts
-  const growthData = vocabGrowth?.map((p) => ({
-    date: format(parseISO(p.date), 'MM/dd'),
-    ...p.byLevel,
-  })) ?? []
-
+  // vocab-growth: { "2026-05-09": { A1: 71, A2: 29 }, ... }
+  const growthData = vocabGrowthMap
+    ? Object.entries(vocabGrowthMap).map(([date, levels]) => ({
+        date: format(parseISO(date), 'MM/dd'),
+        ...levels,
+      }))
+    : []
   const cefrKeys = growthData.length
     ? [...new Set(growthData.flatMap((d) => Object.keys(d).filter((k) => k !== 'date')))]
     : []
@@ -73,7 +56,7 @@ export default function ProgressPage() {
     <div className="space-y-6">
       <PageHeader title="Progress" description="Track your learning journey" />
 
-      {/* Overview stats */}
+      {/* Overview */}
       {oLoading ? (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {Array.from({ length: 4 }).map((_, i) => (
@@ -82,21 +65,9 @@ export default function ProgressPage() {
         </div>
       ) : overview ? (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <StatCard
-            icon={<Flame className="h-4 w-4 text-orange-500" />}
-            label="Day streak"
-            value={overview.streak}
-          />
-          <StatCard
-            icon={<Trophy className="h-4 w-4 text-yellow-500" />}
-            label="Total XP"
-            value={overview.totalXp.toLocaleString()}
-          />
-          <StatCard
-            icon={<BookOpen className="h-4 w-4 text-blue-500" />}
-            label="Videos completed"
-            value={overview.videosCompleted}
-          />
+          <StatCard icon={<Flame className="h-4 w-4 text-orange-500" />} label="Day streak" value={overview.streakDays} />
+          <StatCard icon={<Trophy className="h-4 w-4 text-yellow-500" />} label="Total XP" value={overview.totalXp.toLocaleString()} />
+          <StatCard icon={<BookOpen className="h-4 w-4 text-blue-500" />} label="Videos completed" value={overview.videosCompleted} />
           <StatCard
             icon={<Mic className="h-4 w-4 text-green-500" />}
             label="Vocab mastered"
@@ -119,21 +90,12 @@ export default function ProgressPage() {
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
               <XAxis dataKey="date" tick={{ fontSize: 11 }} />
               <YAxis tick={{ fontSize: 11 }} />
-              <Tooltip
-                contentStyle={{ fontSize: 12, borderRadius: 8 }}
-                formatter={(v: unknown) => [`${v} min`]}
-              />
+              <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} formatter={(v: unknown) => [`${v} min`]} />
               {activityKeys.length > 0 ? (
                 <>
                   <Legend iconSize={10} wrapperStyle={{ fontSize: 11 }} />
                   {activityKeys.map((key) => (
-                    <Bar
-                      key={key}
-                      dataKey={key}
-                      stackId="a"
-                      fill={ACTIVITY_COLORS[key] ?? '#6b7280'}
-                      name={key.charAt(0).toUpperCase() + key.slice(1)}
-                    />
+                    <Bar key={key} dataKey={key} stackId="a" fill={ACTIVITY_COLORS[key] ?? '#6b7280'} name={key.charAt(0).toUpperCase() + key.slice(1)} />
                   ))}
                 </>
               ) : (
@@ -153,30 +115,22 @@ export default function ProgressPage() {
           </p>
         ) : (
           <div className="flex flex-wrap gap-2">
-            {phonemes
-              .sort((a, b) => b.errorRate - a.errorRate)
-              .map((p) => {
-                const intensity = Math.round(p.errorRate * 9) + 1
-                return (
-                  <div
-                    key={p.phoneme}
-                    title={`${Math.round(p.errorRate * 100)}% error rate · ${p.totalAttempts} attempts`}
-                    className={cn(
-                      'px-3 py-2 rounded-lg font-mono text-sm text-center cursor-default transition-transform hover:scale-105',
-                      intensity >= 8
-                        ? 'bg-red-500 text-white'
-                        : intensity >= 6
-                        ? 'bg-red-300 text-red-900'
-                        : intensity >= 4
-                        ? 'bg-orange-200 text-orange-900'
-                        : 'bg-yellow-100 text-yellow-800',
-                    )}
-                  >
-                    <div className="font-bold">/{p.phoneme}/</div>
-                    <div className="text-xs opacity-80">{Math.round(p.errorRate * 100)}%</div>
-                  </div>
-                )
-              })}
+            {phonemes.sort((a, b) => b.errorRate - a.errorRate).map((p) => {
+              const pct = Math.round(p.errorRate * 100)
+              return (
+                <div
+                  key={p.phoneme}
+                  title={`${pct}% error · ${p.totalAttempts} attempts`}
+                  className={cn(
+                    'px-3 py-2 rounded-lg font-mono text-sm cursor-default hover:scale-105 transition-transform',
+                    pct >= 70 ? 'bg-red-500 text-white' : pct >= 50 ? 'bg-red-300 text-red-900' : pct >= 30 ? 'bg-orange-200 text-orange-900' : 'bg-yellow-100 text-yellow-800',
+                  )}
+                >
+                  <div className="font-bold">/{p.phoneme}/</div>
+                  <div className="text-xs opacity-80">{pct}%</div>
+                </div>
+              )
+            })}
           </div>
         )}
       </div>
@@ -197,14 +151,7 @@ export default function ProgressPage() {
               <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} />
               <Legend iconSize={10} wrapperStyle={{ fontSize: 11 }} />
               {cefrKeys.map((level) => (
-                <Line
-                  key={level}
-                  type="monotone"
-                  dataKey={level}
-                  stroke={CEFR_COLORS[level] ?? '#6b7280'}
-                  dot={false}
-                  strokeWidth={2}
-                />
+                <Line key={level} type="monotone" dataKey={level} stroke={CEFR_COLORS[level] ?? '#6b7280'} dot={false} strokeWidth={2} />
               ))}
             </LineChart>
           </ResponsiveContainer>

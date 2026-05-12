@@ -79,7 +79,7 @@ export default function HistoryPage() {
 
                 <div className="text-right shrink-0 hidden sm:block">
                   <p className="text-xs text-muted-foreground">
-                    {format(parseISO(session.updatedAt), 'MMM d, yyyy')}
+                    {format(parseISO(session.startedAt ?? session.updatedAt ?? session.createdAt ?? ''), 'MMM d, yyyy')}
                   </p>
                   {session.status !== 'COMPLETED' && (
                     <Button size="sm" variant="outline" className="mt-1 h-6 text-xs">Resume</Button>

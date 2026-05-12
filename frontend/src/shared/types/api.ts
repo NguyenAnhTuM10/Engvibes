@@ -144,10 +144,13 @@ export interface Session {
   videoId: string
   status: SessionStatus
   currentStep: number
+  completedSteps?: number[]
   scaffoldLevel: number | null
   totalXpEarned: number
-  createdAt: string
-  updatedAt: string
+  startedAt?: string
+  completedAt?: string | null
+  createdAt?: string
+  updatedAt?: string
 }
 
 export interface WarmupWordResponse {
@@ -167,8 +170,10 @@ export interface SessionHistoryItem {
   status: SessionStatus
   currentStep: number
   totalXpEarned: number
-  createdAt: string
-  updatedAt: string
+  startedAt?: string
+  completedAt?: string | null
+  createdAt?: string
+  updatedAt?: string
 }
 
 // ── Phrase / Shadow ───────────────────────────────────────────────────────────
@@ -250,7 +255,7 @@ export interface SpeakFeedback {
 // ── Stats ─────────────────────────────────────────────────────────────────────
 
 export interface OverviewStats {
-  streak: number
+  streakDays: number
   totalXp: number
   videosCompleted: number
   vocabMastered: number
@@ -263,20 +268,15 @@ export interface DailyActivity {
   byActivity: Record<string, number>
 }
 
-export interface WeeklyStats {
-  days: DailyActivity[]
-}
-
 export interface PhonemeStats {
   phoneme: string
   errorRate: number
   totalAttempts: number
+  errors: number
 }
 
-export interface VocabGrowthPoint {
-  date: string
-  byLevel: Partial<Record<CefrLevel, number>>
-}
+// vocab-growth backend shape: { "2026-05-09": { A1: 71, A2: 29 }, ... }
+export type VocabGrowthData = Record<string, Partial<Record<CefrLevel, number>>>
 
 export interface DailyChallenge {
   videoId: string
