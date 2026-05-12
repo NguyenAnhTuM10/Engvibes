@@ -45,6 +45,20 @@ Warmup → Listen → Phrase Practice → Shadow (Whisper) → **Retell (AI coac
 | P-BE6-3 | WebSocket notifications + Rate limiting | ✅ Done |
 | P-BE7-1 | Demo seed + OpenAPI polish + README | ✅ Done |
 | P-FE1-1 | Auth UI (Login + Register) + JWT store + AuthGuard | ✅ Done |
+| P-FE1-2 | Main layout + Sidebar navigation | ✅ Done |
+| P-FE1-3 | Vocab search + Deck list + Deck detail | ✅ Done |
+| P-FE1-4 | Flashcard Review session (FSRS rating) | ✅ Done |
+| P-FE2-1 | Video Library page (filters + recommended) | ✅ Done |
+| P-FE2-2 | Session shell + Step 0 Warmup | ✅ Done |
+| P-FE2-3 | Step 1 Listen — video player + clickable subtitles | ✅ Done |
+| P-FE3-1 | Audio recorder + Step 2 Phrase Practice | ✅ Done |
+| P-FE3-2 | Step 3 Shadow — per-segment + phoneme display | ✅ Done |
+| P-FE4-1 | Step 4 Retell — scaffold selector + 4 levels | ✅ Done |
+| P-FE4-2 | Retell Feedback Panel (showcase) | ✅ Done |
+| P-FE4-3 | Step 5 Speak + Step 6 Quick Review + Session Complete | ✅ Done |
+| P-FE5-1 | Progress Dashboard (recharts — weekly/phoneme/vocab) | ✅ Done |
+| P-FE5-2 | HomePage daily challenge + History + Profile | ✅ Done |
+| P-FE6 | Error boundary + 429 handling + demo login | ✅ Done |
 
 **Files đã tạo (backend):**
 - `EnglishAppApplication.java`
