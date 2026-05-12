@@ -3,9 +3,14 @@ import { toast } from 'sonner'
 import api from '@/shared/api/client'
 import type {
   ApiResponse,
+  Card,
   Page,
   PhraseAttemptResult,
+  RetellFeedback,
+  RetellScaffoldResponse,
   Session,
+  SpeakFeedback,
+  SpeakingQuestionResponse,
   SessionHistoryItem,
   ShadowAttemptResult,
   SubtitleSegment,
@@ -183,5 +188,87 @@ export const useSubmitShadowAttempt = (sessionId: string) =>
         )
         .then((r) => r.data)
     },
+    onError: (err: Error) => toast.error(err.message),
+  })
+
+// ── Retell ────────────────────────────────────────────────────────────────────
+
+export const useStartRetell = (sessionId: string) =>
+  useMutation({
+    mutationFn: (scaffoldLevel: number) =>
+      api
+        .post<never, ApiResponse<RetellScaffoldResponse>>(
+          `/api/sessions/${sessionId}/retell/start`,
+          { scaffoldLevel },
+        )
+        .then((r) => r.data),
+    onError: (err: Error) => toast.error(err.message),
+  })
+
+export const useSubmitRetellAttempt = (sessionId: string) =>
+  useMutation({
+    mutationFn: (audio: Blob) => {
+      const form = new FormData()
+      form.append('audio', audio, 'recording.webm')
+      return api
+        .post<never, ApiResponse<RetellFeedback>>(
+          `/api/sessions/${sessionId}/retell/attempt`,
+          form,
+          { headers: { 'Content-Type': 'multipart/form-data' } },
+        )
+        .then((r) => r.data)
+    },
+    onError: (err: Error) => toast.error(err.message),
+  })
+
+// ── Speak ─────────────────────────────────────────────────────────────────────
+
+export const useSpeakingQuestion = (sessionId: string) =>
+  useQuery({
+    queryKey: ['sessions', sessionId, 'speak-question'],
+    queryFn: () =>
+      api
+        .get<never, ApiResponse<SpeakingQuestionResponse>>(
+          `/api/sessions/${sessionId}/speak/question`,
+        )
+        .then((r) => r.data),
+    enabled: !!sessionId,
+    staleTime: 60 * 60_000,
+  })
+
+export const useSubmitSpeakAttempt = (sessionId: string) =>
+  useMutation({
+    mutationFn: (audio: Blob) => {
+      const form = new FormData()
+      form.append('audio', audio, 'recording.webm')
+      return api
+        .post<never, ApiResponse<SpeakFeedback>>(
+          `/api/sessions/${sessionId}/speak/attempt`,
+          form,
+          { headers: { 'Content-Type': 'multipart/form-data' } },
+        )
+        .then((r) => r.data)
+    },
+    onError: (err: Error) => toast.error(err.message),
+  })
+
+// ── Quick Review ──────────────────────────────────────────────────────────────
+
+export const useQuickReviewCards = (sessionId: string) =>
+  useQuery({
+    queryKey: ['sessions', sessionId, 'quick-review'],
+    queryFn: () =>
+      api
+        .get<never, ApiResponse<Card[]>>(`/api/sessions/${sessionId}/quick-review`)
+        .then((r) => r.data),
+    enabled: !!sessionId,
+    staleTime: 5 * 60_000,
+  })
+
+export const useQuickReviewCard = (sessionId: string) =>
+  useMutation({
+    mutationFn: ({ cardId, rating }: { cardId: string; rating: 1 | 2 | 3 | 4 }) =>
+      api
+        .post(`/api/sessions/${sessionId}/quick-review/review/${cardId}`, { rating }),
     onError: (err: Error) => toast.error(err.message),
   })

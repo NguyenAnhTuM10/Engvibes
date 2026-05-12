@@ -191,3 +191,58 @@ export interface PhraseAttemptResult {
 export interface ShadowAttemptResult extends PhraseAttemptResult {
   weakPhonemes: string[]
 }
+
+// ── Retell ────────────────────────────────────────────────────────────────────
+
+export interface RetellScaffoldResponse {
+  scaffoldLevel: number
+  wordBank?: string[] | null
+  sentenceStarters?: string[] | null
+  storyFrame?: string | null
+  keyPoints?: string[] | null
+}
+
+export interface GrammarIssue {
+  errorQuote: string
+  correction: string
+  explanation: string
+}
+
+export interface RetellFeedback {
+  score: number
+  coverageScore: number
+  vocabularyScore: number
+  grammarScore: number
+  transcript: string
+  coveredPoints: string[]
+  missedPoints: string[]
+  usedVocab: string[]
+  missedVocab: string[]
+  grammarIssues: GrammarIssue[]
+  positiveNotes: string[]
+  improvementTips: string[]
+  modelAnswer: string
+}
+
+// ── Speak ─────────────────────────────────────────────────────────────────────
+
+export interface SpeakingQuestionResponse {
+  question: string
+  suggestedVocab: string[]
+  collocations: string[]
+  sampleOpening?: string | null
+  structureTips?: string[] | null
+}
+
+export interface SpeakFeedback {
+  score: number
+  fluencyScore: number
+  grammarScore: number
+  vocabVarietyScore: number
+  transcript: string
+  vocabFromVideoUsed: string[]
+  grammarIssues: GrammarIssue[]
+  positiveNotes: string[]
+  improvementTips: string[]
+  modelAnswer: string
+}

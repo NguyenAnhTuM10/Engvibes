@@ -3,13 +3,22 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { X, AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useVideo } from '@/features/videos/api'
-import { useCreateOrGetSession, useAdvanceStep } from '@/features/session/api'
+import {
+  useCreateOrGetSession,
+  useAdvanceStep,
+  useFinishSession,
+} from '@/features/session/api'
 import { useSessionStore } from '@/features/session/store'
 import StepNavigator from '@/features/session/components/StepNavigator'
+import SessionCompleteScreen from '@/features/session/components/SessionCompleteScreen'
 import WarmupStep from '@/features/session/steps/WarmupStep'
 import ListenStep from '@/features/session/steps/ListenStep'
 import PhraseStep from '@/features/session/steps/PhraseStep'
 import ShadowStep from '@/features/session/steps/ShadowStep'
+import RetellStep from '@/features/session/steps/RetellStep'
+import SpeakStep from '@/features/session/steps/SpeakStep'
+import QuickReviewStep from '@/features/session/steps/QuickReviewStep'
+import type { Session } from '@/shared/types/api'
 
 function ExitDialog({ onConfirm, onCancel }: { onConfirm: () => void; onCancel: () => void }) {
   return (
@@ -23,27 +32,10 @@ function ExitDialog({ onConfirm, onCancel }: { onConfirm: () => void; onCancel: 
           Your progress will be saved. You can resume this session later from the History page.
         </p>
         <div className="flex gap-3">
-          <Button variant="outline" className="flex-1" onClick={onCancel}>
-            Keep learning
-          </Button>
-          <Button variant="destructive" className="flex-1" onClick={onConfirm}>
-            Exit
-          </Button>
+          <Button variant="outline" className="flex-1" onClick={onCancel}>Keep learning</Button>
+          <Button variant="destructive" className="flex-1" onClick={onConfirm}>Exit</Button>
         </div>
       </div>
-    </div>
-  )
-}
-
-function StepPlaceholder({ step, onSkip }: { step: number; onSkip: () => void }) {
-  const labels = ['', '', 'Phrase Practice', 'Shadowing', 'Retell Coach', 'Speaking', 'Quick Review']
-  return (
-    <div className="flex flex-col items-center justify-center h-full gap-4 text-muted-foreground">
-      <p className="text-xl font-semibold text-foreground">{labels[step] ?? `Step ${step + 1}`}</p>
-      <p className="text-sm">This step will be available in the next update.</p>
-      <Button variant="outline" onClick={onSkip}>
-        Skip to next step
-      </Button>
     </div>
   )
 }
@@ -52,35 +44,39 @@ export default function VideoSessionPage() {
   const { videoId } = useParams<{ videoId: string }>()
   const navigate = useNavigate()
   const [showExit, setShowExit] = useState(false)
+  const [completedSession, setCompletedSession] = useState<Session | null>(null)
 
   const { sessionId, currentStep, setSession, advanceStep, reset } = useSessionStore()
   const { data: video } = useVideo(videoId ?? '')
   const createSession = useCreateOrGetSession()
   const advanceMutation = useAdvanceStep()
+  const finishMutation = useFinishSession()
 
   useEffect(() => {
     if (!videoId) return
     createSession.mutate(videoId, {
-      onSuccess: (session) => {
-        setSession(session.id, session.currentStep)
-      },
+      onSuccess: (session) => setSession(session.id, session.currentStep),
     })
-    return () => {
-      // don't reset on unmount — user might navigate back
-    }
   }, [videoId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleAdvance = () => {
     if (!sessionId) return
     if (currentStep >= 6) {
-      navigate('/')
+      finishMutation.mutate(sessionId, {
+        onSuccess: (session) => {
+          reset()
+          setCompletedSession(session)
+        },
+        onError: () => {
+          reset()
+          navigate('/videos')
+        },
+      })
       return
     }
     advanceMutation.mutate(
       { sessionId, completed: true },
-      {
-        onSuccess: (session) => advanceStep(session.currentStep),
-      },
+      { onSuccess: (session) => advanceStep(session.currentStep) },
     )
   }
 
@@ -101,16 +97,17 @@ export default function VideoSessionPage() {
     return (
       <div className="flex flex-col items-center justify-center h-screen gap-4 text-muted-foreground">
         <p>Failed to start session</p>
-        <Button variant="outline" onClick={() => navigate('/videos')}>
-          Back to Videos
-        </Button>
+        <Button variant="outline" onClick={() => navigate('/videos')}>Back to Videos</Button>
       </div>
     )
   }
 
+  if (completedSession) {
+    return <SessionCompleteScreen session={completedSession} />
+  }
+
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-background">
-      {/* Header */}
       <header className="border-b px-4 py-2.5 flex items-center gap-3 shrink-0">
         <Button
           variant="ghost"
@@ -120,11 +117,9 @@ export default function VideoSessionPage() {
         >
           <X className="h-4 w-4" />
         </Button>
-
         <p className="text-sm font-medium truncate flex-1 min-w-0">
           {video?.title ?? 'Loading...'}
         </p>
-
         <div className="shrink-0 overflow-x-auto">
           <StepNavigator
             currentStep={currentStep}
@@ -133,7 +128,6 @@ export default function VideoSessionPage() {
         </div>
       </header>
 
-      {/* Content */}
       <main className="flex-1 overflow-y-auto p-6">
         {!sessionId ? (
           <div className="flex items-center justify-center h-full">
@@ -142,40 +136,30 @@ export default function VideoSessionPage() {
         ) : currentStep === 0 ? (
           <WarmupStep sessionId={sessionId} onComplete={handleAdvance} />
         ) : currentStep === 1 ? (
-          <ListenStep
-            sessionId={sessionId}
-            videoUrl={video?.videoUrl ?? ''}
-            onComplete={handleAdvance}
-          />
+          <ListenStep sessionId={sessionId} videoUrl={video?.videoUrl ?? ''} onComplete={handleAdvance} />
         ) : currentStep === 2 ? (
           <PhraseStep sessionId={sessionId} onComplete={handleAdvance} />
         ) : currentStep === 3 ? (
           <ShadowStep sessionId={sessionId} onComplete={handleAdvance} />
+        ) : currentStep === 4 ? (
+          <RetellStep sessionId={sessionId} onComplete={handleAdvance} />
+        ) : currentStep === 5 ? (
+          <SpeakStep sessionId={sessionId} onComplete={handleAdvance} />
         ) : (
-          <StepPlaceholder step={currentStep} onSkip={handleAdvance} />
+          <QuickReviewStep sessionId={sessionId} onComplete={handleAdvance} />
         )}
       </main>
 
-      {/* Footer */}
       <footer className="border-t px-4 py-2.5 flex items-center justify-between shrink-0">
-        <span className="text-xs text-muted-foreground">
-          Step {currentStep + 1} of 7
-        </span>
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleAdvance}
-            disabled={advanceMutation.isPending}
-          >
-            Skip step
-          </Button>
-          {currentStep >= 6 && (
-            <Button size="sm" onClick={handleExit}>
-              Finish session
-            </Button>
-          )}
-        </div>
+        <span className="text-xs text-muted-foreground">Step {currentStep + 1} of 7</span>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleAdvance}
+          disabled={advanceMutation.isPending || finishMutation.isPending}
+        >
+          {currentStep >= 6 ? 'Finish session' : 'Skip step'}
+        </Button>
       </footer>
 
       {showExit && (
