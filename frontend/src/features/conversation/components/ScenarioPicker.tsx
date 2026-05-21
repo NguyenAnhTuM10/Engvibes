@@ -22,7 +22,7 @@ export default function ScenarioPicker({ onStarted }: Props) {
   const startMutation = useStartConversation()
   const { setSession } = useConversationStore()
 
-  const handleSelect = (scenarioId: string, displayName: string) => {
+  const handleSelect = (scenarioId: string) => {
     startMutation.mutate(scenarioId, {
       onSuccess: (data) => {
         setSession(data.sessionId, data.scenarioId, data.scenarioDisplayName)
@@ -54,7 +54,7 @@ export default function ScenarioPicker({ onStarted }: Props) {
           <Card
             key={scenario.id}
             className="cursor-pointer border-2 transition-colors hover:border-primary"
-            onClick={() => !startMutation.isPending && handleSelect(scenario.id, scenario.displayName)}
+            onClick={() => !startMutation.isPending && handleSelect(scenario.id)}
           >
             <CardHeader className="pb-2">
               <div className="flex items-center gap-3">

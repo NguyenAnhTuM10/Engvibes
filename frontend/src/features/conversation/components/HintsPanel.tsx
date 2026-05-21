@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { Lightbulb, ChevronDown, ChevronUp } from 'lucide-react'
-import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import type { HintResponse } from '../types'
 
