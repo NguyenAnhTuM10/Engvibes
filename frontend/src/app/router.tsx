@@ -15,7 +15,8 @@ const ProfilePage = lazy(() => import('@/pages/ProfilePage'))
 const AdminVideosPage = lazy(() => import('@/pages/AdminVideosPage'))
 const DeckDetailPage = lazy(() => import('@/pages/DeckDetailPage'))
 const ReviewPage = lazy(() => import('@/pages/ReviewPage'))
-const VideoSessionPage = lazy(() => import('@/pages/VideoSessionPage'))
+const VideoWatchPage = lazy(() => import('@/pages/VideoWatchPage'))
+const SpeakPracticePage = lazy(() => import('@/pages/SpeakPracticePage'))
 const ConversationPage = lazy(() => import('@/pages/ConversationPage'))
 
 function PageLoader() {
@@ -40,10 +41,10 @@ const router = createBrowserRouter([
     element: <Wrap><RegisterPage /></Wrap>,
   },
   {
-    path: '/session/:videoId',
+    path: '/watch/:videoId',
     element: (
       <AuthGuard>
-        <Wrap><VideoSessionPage /></Wrap>
+        <Wrap><VideoWatchPage /></Wrap>
       </AuthGuard>
     ),
   },
@@ -63,6 +64,7 @@ const router = createBrowserRouter([
       { path: 'progress', element: <Wrap><ProgressPage /></Wrap> },
       { path: 'history', element: <Wrap><HistoryPage /></Wrap> },
       { path: 'profile', element: <Wrap><ProfilePage /></Wrap> },
+      { path: 'speak', element: <Wrap><SpeakPracticePage /></Wrap> },
       { path: 'conversation', element: <Wrap><ConversationPage /></Wrap> },
       {
         path: 'admin/videos',

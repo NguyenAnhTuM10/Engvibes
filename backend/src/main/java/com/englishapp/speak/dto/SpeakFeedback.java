@@ -7,6 +7,7 @@ import java.util.List;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record SpeakFeedback(
+        @JsonProperty("transcript") String transcript,
         @JsonProperty("fluency_score") int fluencyScore,
         @JsonProperty("grammar_score") int grammarScore,
         @JsonProperty("vocab_variety_score") int vocabVarietyScore,

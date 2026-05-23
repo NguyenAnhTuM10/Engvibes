@@ -10,7 +10,7 @@ import {
   Shield,
   ChevronLeft,
   ChevronRight,
-  MessageCircle,
+  Mic,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -29,11 +29,11 @@ interface NavItem {
 const navItems: NavItem[] = [
   { label: 'Home', href: '/', icon: <Home className="h-4 w-4" /> },
   { label: 'Videos', href: '/videos', icon: <Play className="h-4 w-4" /> },
+  { label: 'Speaking', href: '/speak', icon: <Mic className="h-4 w-4" /> },
   { label: 'Decks', href: '/decks', icon: <BookOpen className="h-4 w-4" /> },
   { label: 'Progress', href: '/progress', icon: <TrendingUp className="h-4 w-4" /> },
   { label: 'History', href: '/history', icon: <History className="h-4 w-4" /> },
   { label: 'Profile', href: '/profile', icon: <User className="h-4 w-4" /> },
-  { label: 'Conversation', href: '/conversation', icon: <MessageCircle className="h-4 w-4" /> },
   { label: 'Admin', href: '/admin/videos', icon: <Shield className="h-4 w-4" />, adminOnly: true },
 ]
 

@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import api from '@/shared/api/client'
-import type { ApiResponse, Page, Video, VideoFilter } from '@/shared/types/api'
+import type { ApiResponse, Page, SubtitleSegment, Video, VideoFilter } from '@/shared/types/api'
 
 export const useVideos = (filter: VideoFilter = {}) =>
   useQuery({
@@ -29,4 +29,15 @@ export const useRecommendedVideos = (limit = 6) =>
         .get<never, ApiResponse<Video[]>>('/api/recommend/videos', { params: { limit } })
         .then((r) => r.data),
     staleTime: 10 * 60_000,
+  })
+
+export const useVideoSubtitles = (videoId: string) =>
+  useQuery({
+    queryKey: ['videos', videoId, 'subtitles'],
+    queryFn: () =>
+      api
+        .get<never, ApiResponse<SubtitleSegment[]>>(`/api/videos/${videoId}/subtitles`)
+        .then((r) => r.data),
+    enabled: !!videoId,
+    staleTime: 60 * 60_000,
   })

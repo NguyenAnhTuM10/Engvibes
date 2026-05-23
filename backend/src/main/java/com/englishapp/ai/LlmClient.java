@@ -6,6 +6,7 @@ import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 
@@ -56,6 +57,46 @@ public class LlmClient {
         Map<?, ?> message = (Map<?, ?>) ((Map<?, ?>) choices.get(0)).get("message");
         String content = (String) message.get("content");
         log.debug("LLM response length: {} chars", content != null ? content.length() : 0);
+        return content;
+    }
+
+    /** Send audio bytes directly to gpt-4o-audio-preview for evaluation. */
+    public String chatCompletionWithAudio(String systemPrompt, String textPrompt,
+                                          byte[] audioBytes, String audioFormat) {
+        String base64Audio = Base64.getEncoder().encodeToString(audioBytes);
+
+        Map<String, Object> body = Map.of(
+                "model", "gpt-4o-audio-preview",
+                "modalities", List.of("text"),
+                "messages", List.of(
+                        Map.of("role", "system", "content", systemPrompt),
+                        Map.of("role", "user", "content", List.of(
+                                Map.of("type", "input_audio",
+                                        "input_audio", Map.of("data", base64Audio, "format", audioFormat)),
+                                Map.of("type", "text", "text", textPrompt)
+                        ))
+                ),
+                "temperature", 0.3
+        );
+
+        log.debug("LLM audio request — model=gpt-4o-audio-preview, audioBytes={}", audioBytes.length);
+
+        Map<?, ?> response = webClient.post()
+                .uri("/chat/completions")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(body)
+                .retrieve()
+                .bodyToMono(Map.class)
+                .block();
+
+        if (response == null) throw new RuntimeException("LLM returned null response");
+
+        List<?> choices = (List<?>) response.get("choices");
+        if (choices == null || choices.isEmpty()) throw new RuntimeException("LLM returned no choices");
+
+        Map<?, ?> message = (Map<?, ?>) ((Map<?, ?>) choices.get(0)).get("message");
+        String content = (String) message.get("content");
+        log.debug("LLM audio response length: {} chars", content != null ? content.length() : 0);
         return content;
     }
 }

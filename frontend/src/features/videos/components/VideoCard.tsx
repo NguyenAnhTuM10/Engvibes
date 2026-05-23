@@ -17,8 +17,8 @@ const VideoCard = memo(function VideoCard({ video }: { video: Video }) {
     <div
       role="button"
       tabIndex={0}
-      onClick={() => navigate(`/session/${video.id}`)}
-      onKeyDown={(e) => e.key === 'Enter' && navigate(`/session/${video.id}`)}
+      onClick={() => navigate(`/watch/${video.id}`)}
+      onKeyDown={(e) => e.key === 'Enter' && navigate(`/watch/${video.id}`)}
       className="group cursor-pointer rounded-lg overflow-hidden border bg-card hover:shadow-md transition-all duration-200 hover:scale-[1.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
       <div className="relative aspect-video bg-muted">
