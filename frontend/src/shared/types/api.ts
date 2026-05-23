@@ -254,6 +254,16 @@ export interface SpeakFeedback {
   modelAnswer: string
 }
 
+export interface IeltsFeedback {
+  transcript: string
+  fluency: number
+  grammar: number
+  vocabulary: number
+  pronunciation: number
+  overall: number
+  feedback: string
+}
+
 // ── Stats ─────────────────────────────────────────────────────────────────────
 
 export interface OverviewStats {

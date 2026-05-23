@@ -1,7 +1,7 @@
 import { useMutation } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import api from '@/shared/api/client'
-import type { ApiResponse, SpeakFeedback } from '@/shared/types/api'
+import type { ApiResponse, IeltsFeedback } from '@/shared/types/api'
 
 export const useAssessFreeformSpeak = () =>
   useMutation({
@@ -25,7 +25,7 @@ export const useAssessFreeformSpeak = () =>
       form.append('vocab', vocab.join(', '))
       form.append('collocations', collocations.join(', '))
       return api
-        .post<never, ApiResponse<SpeakFeedback>>('/api/speak/freeform', form, {
+        .post<never, ApiResponse<IeltsFeedback>>('/api/speak/freeform', form, {
           headers: { 'Content-Type': 'multipart/form-data' },
         })
         .then((r) => r.data)

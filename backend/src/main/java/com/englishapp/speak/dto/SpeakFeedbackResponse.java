@@ -7,6 +7,7 @@ import lombok.NoArgsConstructor;
 
 import java.util.List;
 
+/** HTTP response for session-based speak attempt (Whisper + text LLM). */
 @Data
 @Builder
 @NoArgsConstructor

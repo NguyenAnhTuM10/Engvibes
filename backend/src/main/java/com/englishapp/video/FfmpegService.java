@@ -32,6 +32,25 @@ public class FfmpegService {
         return output;
     }
 
+    /** Convert any audio format (webm, ogg, mp4…) to 16kHz mono WAV suitable for OpenAI audio models. */
+    public byte[] convertToWav(byte[] inputBytes, String inputFormat) throws IOException {
+        File inputFile  = Files.createTempFile("spk-in-",  "." + inputFormat).toFile();
+        File outputFile = Files.createTempFile("spk-out-", ".wav").toFile();
+        try {
+            Files.write(inputFile.toPath(), inputBytes);
+            run(List.of(
+                    "ffmpeg", "-y",
+                    "-i", inputFile.getAbsolutePath(),
+                    "-ar", "16000", "-ac", "1",
+                    "-f", "wav",
+                    outputFile.getAbsolutePath()));
+            return Files.readAllBytes(outputFile.toPath());
+        } finally {
+            inputFile.delete();
+            outputFile.delete();
+        }
+    }
+
     public File extractThumbnail(File videoFile, double atSec) throws IOException {
         File output = Files.createTempFile("thumb-", ".jpg").toFile();
         run(List.of(
