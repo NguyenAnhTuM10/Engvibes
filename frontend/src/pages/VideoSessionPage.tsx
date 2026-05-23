@@ -75,7 +75,7 @@ export default function VideoSessionPage() {
       return
     }
     advanceMutation.mutate(
-      { sessionId, completed: true },
+      { sessionId, step: currentStep, action: 'complete' },
       { onSuccess: (session) => advanceStep(session.currentStep) },
     )
   }

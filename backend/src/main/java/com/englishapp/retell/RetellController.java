@@ -28,8 +28,8 @@ public class RetellController {
     }
 
     @PostMapping("/attempt")
-    public ApiResponse<RetellAttemptSummary> submitAttempt(@PathVariable UUID sessionId,
-                                                           @RequestParam MultipartFile audio) {
+    public ApiResponse<RetellFeedbackResponse> submitAttempt(@PathVariable UUID sessionId,
+                                                             @RequestParam MultipartFile audio) {
         return ApiResponse.ok(retellService.submitAttempt(sessionId, currentUserId(), audio));
     }
 

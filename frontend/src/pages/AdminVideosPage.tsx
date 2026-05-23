@@ -53,6 +53,12 @@ function UploadDialog({ onClose }: { onClose: () => void }) {
         </div>
 
         <div className="p-5 space-y-4">
+          {upload.isError && (
+            <div className="flex items-start gap-2 rounded-lg bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 p-3 text-sm text-red-700 dark:text-red-400">
+              <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+              <span>{upload.error?.message ?? 'Upload failed'}</span>
+            </div>
+          )}
           {/* File picker */}
           <div>
             <Label>Video file (MP4)</Label>
@@ -191,8 +197,10 @@ function VideoRow({ video }: { video: Video }) {
           {displayStatus === 'DRAFT' && <Clock className="h-3 w-3" />}
           {cfg.label}
         </span>
-        {liveStatus?.errorMessage && (
-          <p className="text-xs text-red-500 mt-1 max-w-[200px] line-clamp-2">{liveStatus.errorMessage}</p>
+        {(liveStatus?.errorMessage ?? video.errorMessage) && (
+          <p className="text-xs text-red-500 mt-1 max-w-[200px] line-clamp-2" title={liveStatus?.errorMessage ?? video.errorMessage ?? ''}>
+            {liveStatus?.errorMessage ?? video.errorMessage}
+          </p>
         )}
       </td>
 

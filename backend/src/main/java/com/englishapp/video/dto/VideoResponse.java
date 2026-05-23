@@ -23,6 +23,7 @@ public class VideoResponse {
     private CEFRLevel cefrLevel;
     private String topic;
     private VideoStatus status;
+    private String errorMessage;
     private int viewCount;
     private Instant createdAt;
     // Enrichment fields (populated after pipeline completes)

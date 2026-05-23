@@ -18,6 +18,9 @@ public class StorageConfig {
     @Value("${app.storage.endpoint}")
     private String endpoint;
 
+    @Value("${app.storage.public-url}")
+    private String publicUrl;
+
     @Value("${app.storage.access-key}")
     private String accessKey;
 
@@ -42,8 +45,9 @@ public class StorageConfig {
 
     @Bean
     public S3Presigner s3Presigner() {
+        // Sign with publicUrl so presigned URLs are valid for browser requests
         return S3Presigner.builder()
-                .endpointOverride(URI.create(endpoint))
+                .endpointOverride(URI.create(publicUrl))
                 .credentialsProvider(StaticCredentialsProvider.create(
                         AwsBasicCredentials.create(accessKey, secretKey)))
                 .region(Region.of(region))

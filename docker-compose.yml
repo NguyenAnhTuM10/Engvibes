@@ -81,7 +81,7 @@ services:
       S3_SECRET_KEY: minioadmin
       CORS_ALLOWED_ORIGINS: http://localhost
       JWT_SECRET: ${JWT_SECRET:-dev-secret-key-at-least-32-characters-long-for-hs256}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-dummy}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
     ports:
       - "8080:8080"
     depends_on:

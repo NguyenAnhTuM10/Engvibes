@@ -72,7 +72,7 @@ function SpeakFeedbackPanel({
         )}
       </div>
 
-      {feedback.vocabFromVideoUsed.length > 0 && (
+      {(feedback.vocabFromVideoUsed?.length ?? 0) > 0 && (
         <div className="border rounded-xl p-4">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
             Video vocab you used
@@ -85,15 +85,15 @@ function SpeakFeedbackPanel({
         </div>
       )}
 
-      {(feedback.positiveNotes.length > 0 || feedback.improvementTips.length > 0) && (
+      {((feedback.positiveNotes?.length ?? 0) > 0 || (feedback.improvementTips?.length ?? 0) > 0) && (
         <div className="grid grid-cols-2 gap-3">
-          {feedback.positiveNotes.length > 0 && (
+          {(feedback.positiveNotes?.length ?? 0) > 0 && (
             <div className="border rounded-xl p-3">
               <p className="text-xs font-semibold text-green-700 dark:text-green-400 flex items-center gap-1 mb-2"><ThumbsUp className="h-3.5 w-3.5" /> What worked</p>
               {feedback.positiveNotes.map((n, i) => <p key={i} className="text-xs text-muted-foreground">• {n}</p>)}
             </div>
           )}
-          {feedback.improvementTips.length > 0 && (
+          {(feedback.improvementTips?.length ?? 0) > 0 && (
             <div className="border rounded-xl p-3">
               <p className="text-xs font-semibold text-blue-700 dark:text-blue-400 flex items-center gap-1 mb-2"><Lightbulb className="h-3.5 w-3.5" /> Tips</p>
               {feedback.improvementTips.map((t, i) => <p key={i} className="text-xs text-muted-foreground">• {t}</p>)}
@@ -185,21 +185,21 @@ export default function SpeakStep({ sessionId, onComplete }: Props) {
             </button>
             {hintsOpen && (
               <div className="px-4 pb-4 border-t space-y-3 pt-3">
-                {question.suggestedVocab.length > 0 && (
+                {(question.suggestedVocab?.length ?? 0) > 0 && (
                   <div>
                     <p className="text-xs font-medium text-muted-foreground mb-1.5">Suggested vocabulary</p>
                     <div className="flex flex-wrap gap-1.5">
-                      {question.suggestedVocab.map((w) => (
+                      {question.suggestedVocab?.map((w) => (
                         <span key={w} className="text-xs px-2 py-0.5 bg-muted rounded-full">{w}</span>
                       ))}
                     </div>
                   </div>
                 )}
-                {question.collocations.length > 0 && (
+                {(question.collocations?.length ?? 0) > 0 && (
                   <div>
                     <p className="text-xs font-medium text-muted-foreground mb-1.5">Useful phrases</p>
                     <div className="flex flex-wrap gap-1.5">
-                      {question.collocations.map((c) => (
+                      {question.collocations?.map((c) => (
                         <span key={c} className="text-xs px-2 py-0.5 bg-blue-50 dark:bg-blue-950/20 text-blue-700 dark:text-blue-300 rounded-full">{c}</span>
                       ))}
                     </div>

@@ -68,7 +68,8 @@ public class RetellService {
         return switch (level) {
             case 2 -> RetellScaffoldResponse.builder()
                     .level(2)
-                    .wordBank(parseWarmupWords(video.getWarmupWordsJson()))
+                    .wordBank(parseWarmupWords(video.getWarmupWordsJson()).stream()
+                            .map(WarmupWord::word).toList())
                     .build();
             case 3 -> RetellScaffoldResponse.builder()
                     .level(3)
@@ -82,7 +83,7 @@ public class RetellService {
         };
     }
 
-    public RetellAttemptSummary submitAttempt(UUID sessionId, UUID userId, MultipartFile audio) {
+    public RetellFeedbackResponse submitAttempt(UUID sessionId, UUID userId, MultipartFile audio) {
         if (!rateLimitService.tryAcquire(userId, "retell", DAILY_RETELL_LIMIT)) {
             throw ApiException.badRequest("Daily retell limit reached (50/day). Try again tomorrow.");
         }
@@ -124,7 +125,7 @@ public class RetellService {
             RetellAttempt saved = retellAttemptRepository.save(attempt);
 
             log.info("Retell attempt {} for session {} — score={}", attemptNumber, sessionId, feedback.overallScore());
-            return toSummary(saved, feedback);
+            return toFeedbackResponse(saved, feedback);
 
         } catch (ApiException e) {
             throw e;
@@ -215,6 +216,30 @@ public class RetellService {
             return (int) result.getSegments().get(result.getSegments().size() - 1).getEnd();
         }
         return 0;
+    }
+
+    private RetellFeedbackResponse toFeedbackResponse(RetellAttempt attempt, RetellFeedback feedback) {
+        return RetellFeedbackResponse.builder()
+                .score(feedback.overallScore())
+                .coverageScore(feedback.coverageScore())
+                .vocabularyScore(feedback.vocabScore())
+                .grammarScore(feedback.grammarScore())
+                .transcript(attempt.getTranscript())
+                .coveredPoints(safe(feedback.coveredPoints()).stream().map(RetellFeedback.CoveredPoint::point).toList())
+                .missedPoints(safe(feedback.missedPoints()))
+                .usedVocab(safe(feedback.vocabUsed()).stream().map(RetellFeedback.VocabUsed::word).toList())
+                .missedVocab(safe(feedback.vocabMissed()))
+                .grammarIssues(safe(feedback.grammarIssues()).stream()
+                        .map(g -> new RetellFeedbackResponse.GrammarIssue(g.errorQuote(), g.correction(), g.briefExplain()))
+                        .toList())
+                .positiveNotes(safe(feedback.positiveNotes()))
+                .improvementTips(safe(feedback.improvementTips()))
+                .modelAnswer(feedback.modelAnswer())
+                .build();
+    }
+
+    private <T> List<T> safe(List<T> list) {
+        return list != null ? list : List.of();
     }
 
     private RetellAttemptSummary toSummary(RetellAttempt attempt, RetellFeedback feedback) {

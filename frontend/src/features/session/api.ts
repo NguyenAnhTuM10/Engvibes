@@ -47,17 +47,17 @@ export const useAdvanceStep = () => {
   return useMutation({
     mutationFn: ({
       sessionId,
-      completed = true,
-      score,
+      step,
+      action = 'complete',
     }: {
       sessionId: string
-      completed?: boolean
-      score?: number
+      step: number
+      action?: 'complete' | 'skip'
     }) =>
       api
         .patch<never, ApiResponse<Session>>(`/api/sessions/${sessionId}/step`, {
-          completed,
-          score,
+          step,
+          action,
         })
         .then((r) => r.data),
     onSuccess: (session) => {

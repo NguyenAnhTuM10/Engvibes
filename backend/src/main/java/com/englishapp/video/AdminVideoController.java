@@ -14,6 +14,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -44,7 +45,7 @@ public class AdminVideoController {
     }
 
     @GetMapping
-    public ApiResponse<Page<VideoResponse>> listAll(@PageableDefault(size = 20) Pageable pageable) {
+    public ApiResponse<Page<VideoResponse>> listAll(@PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
         return ApiResponse.ok(videoService.listAllVideos(pageable));
     }
 

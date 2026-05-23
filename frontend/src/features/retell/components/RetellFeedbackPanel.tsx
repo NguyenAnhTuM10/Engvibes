@@ -71,9 +71,9 @@ export default function RetellFeedbackPanel({ feedback, onTryAgain, onContinue }
       </div>
 
       {/* Coverage */}
-      {(feedback.coveredPoints.length > 0 || feedback.missedPoints.length > 0) && (
+      {((feedback.coveredPoints?.length ?? 0) > 0 || (feedback.missedPoints?.length ?? 0) > 0) && (
         <div className="grid grid-cols-2 gap-4">
-          {feedback.coveredPoints.length > 0 && (
+          {(feedback.coveredPoints?.length ?? 0) > 0 && (
             <div className="border rounded-xl p-4 bg-green-50/50 dark:bg-green-950/10 border-green-200 dark:border-green-800">
               <p className="text-xs font-semibold text-green-700 dark:text-green-400 mb-2 uppercase tracking-wide">
                 ✓ Covered
@@ -88,7 +88,7 @@ export default function RetellFeedbackPanel({ feedback, onTryAgain, onContinue }
               </ul>
             </div>
           )}
-          {feedback.missedPoints.length > 0 && (
+          {(feedback.missedPoints?.length ?? 0) > 0 && (
             <div className="border rounded-xl p-4 bg-red-50/50 dark:bg-red-950/10 border-red-200 dark:border-red-800">
               <p className="text-xs font-semibold text-red-700 dark:text-red-400 mb-2 uppercase tracking-wide">
                 ✗ Missed
@@ -108,12 +108,12 @@ export default function RetellFeedbackPanel({ feedback, onTryAgain, onContinue }
       )}
 
       {/* Vocabulary */}
-      {(feedback.usedVocab.length > 0 || feedback.missedVocab.length > 0) && (
+      {((feedback.usedVocab?.length ?? 0) > 0 || (feedback.missedVocab?.length ?? 0) > 0) && (
         <div className="border rounded-xl p-4 space-y-3">
           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Vocabulary highlights
           </p>
-          {feedback.usedVocab.length > 0 && (
+          {(feedback.usedVocab?.length ?? 0) > 0 && (
             <div>
               <p className="text-xs text-muted-foreground mb-1.5">Words you used</p>
               <div className="flex flex-wrap gap-1.5">
@@ -128,7 +128,7 @@ export default function RetellFeedbackPanel({ feedback, onTryAgain, onContinue }
               </div>
             </div>
           )}
-          {feedback.missedVocab.length > 0 && (
+          {(feedback.missedVocab?.length ?? 0) > 0 && (
             <div>
               <p className="text-xs text-muted-foreground mb-1.5">Vocab you missed</p>
               <div className="flex flex-wrap gap-1.5">
@@ -148,7 +148,7 @@ export default function RetellFeedbackPanel({ feedback, onTryAgain, onContinue }
       )}
 
       {/* Grammar */}
-      {feedback.grammarIssues.length > 0 && (
+      {(feedback.grammarIssues?.length ?? 0) > 0 && (
         <div className="space-y-2">
           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Grammar suggestions
@@ -164,9 +164,9 @@ export default function RetellFeedbackPanel({ feedback, onTryAgain, onContinue }
       )}
 
       {/* Encouragement */}
-      {(feedback.positiveNotes.length > 0 || feedback.improvementTips.length > 0) && (
+      {((feedback.positiveNotes?.length ?? 0) > 0 || (feedback.improvementTips?.length ?? 0) > 0) && (
         <div className="grid grid-cols-2 gap-4">
-          {feedback.positiveNotes.length > 0 && (
+          {(feedback.positiveNotes?.length ?? 0) > 0 && (
             <div className="border rounded-xl p-4 space-y-2">
               <p className="text-xs font-semibold text-green-700 dark:text-green-400 flex items-center gap-1.5">
                 <ThumbsUp className="h-3.5 w-3.5" /> What you did well
@@ -178,7 +178,7 @@ export default function RetellFeedbackPanel({ feedback, onTryAgain, onContinue }
               </ul>
             </div>
           )}
-          {feedback.improvementTips.length > 0 && (
+          {(feedback.improvementTips?.length ?? 0) > 0 && (
             <div className="border rounded-xl p-4 space-y-2">
               <p className="text-xs font-semibold text-blue-700 dark:text-blue-400 flex items-center gap-1.5">
                 <Lightbulb className="h-3.5 w-3.5" /> Tips to improve

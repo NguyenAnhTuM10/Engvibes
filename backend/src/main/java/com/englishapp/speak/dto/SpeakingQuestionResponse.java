@@ -1,6 +1,5 @@
 package com.englishapp.speak.dto;
 
-import com.englishapp.ai.dto.WarmupWord;
 import lombok.Builder;
 import lombok.Data;
 
@@ -10,6 +9,6 @@ import java.util.List;
 @Builder
 public class SpeakingQuestionResponse {
     private String question;
-    private List<WarmupWord> suggestedVocab;
-    private List<String> suggestedCollocations;
+    private List<String> suggestedVocab;
+    private List<String> collocations;
 }

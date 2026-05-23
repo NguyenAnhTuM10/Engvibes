@@ -10,6 +10,7 @@ import com.englishapp.retell.RateLimitService;
 import com.englishapp.session.LearningSession;
 import com.englishapp.session.SessionRepository;
 import com.englishapp.speak.dto.SpeakFeedback;
+import com.englishapp.speak.dto.SpeakFeedbackResponse;
 import com.englishapp.speak.dto.SpeakingQuestionResponse;
 import com.englishapp.storage.StorageService;
 import com.englishapp.user.UserService;
@@ -67,14 +68,14 @@ public class SpeakController {
                 .question(video.getSpeakingQuestion() != null
                         ? video.getSpeakingQuestion()
                         : "What do you think about the topic discussed in this video?")
-                .suggestedVocab(vocab)
-                .suggestedCollocations(flatCollocations)
+                .suggestedVocab(vocab.stream().map(WarmupWord::word).toList())
+                .collocations(flatCollocations)
                 .build());
     }
 
     @PostMapping("/attempt")
-    public ApiResponse<SpeakFeedback> submitAttempt(@PathVariable UUID sessionId,
-                                                    @RequestParam MultipartFile audio) {
+    public ApiResponse<SpeakFeedbackResponse> submitAttempt(@PathVariable UUID sessionId,
+                                                            @RequestParam MultipartFile audio) {
         UUID userId = currentUserId();
         if (!rateLimitService.tryAcquire(userId, "speak", DAILY_SPEAK_LIMIT)) {
             throw ApiException.badRequest("Daily speaking limit reached (50/day). Try again tomorrow.");
@@ -112,7 +113,28 @@ public class SpeakController {
             speakAttemptRepository.save(attempt);
 
             log.info("Speak attempt {} for session {} — score={}", attemptNumber, sessionId, feedback.overallScore());
-            return ApiResponse.ok(feedback);
+
+            List<String> vocabUsedWords = feedback.vocabFromVideoUsed() != null
+                    ? feedback.vocabFromVideoUsed().stream().map(SpeakFeedback.VocabUsed::word).toList()
+                    : List.of();
+            List<SpeakFeedbackResponse.GrammarIssue> grammarIssues = feedback.grammarIssues() != null
+                    ? feedback.grammarIssues().stream()
+                        .map(g -> new SpeakFeedbackResponse.GrammarIssue(g.errorQuote(), g.correction(), g.briefExplain()))
+                        .toList()
+                    : List.of();
+
+            return ApiResponse.ok(SpeakFeedbackResponse.builder()
+                    .score(feedback.overallScore())
+                    .fluencyScore(feedback.fluencyScore())
+                    .grammarScore(feedback.grammarScore())
+                    .vocabVarietyScore(feedback.vocabVarietyScore())
+                    .transcript(transcript)
+                    .vocabFromVideoUsed(vocabUsedWords)
+                    .grammarIssues(grammarIssues)
+                    .positiveNotes(feedback.positiveNotes() != null ? feedback.positiveNotes() : List.of())
+                    .improvementTips(feedback.improvementTips() != null ? feedback.improvementTips() : List.of())
+                    .modelAnswer(feedback.modelAnswer())
+                    .build());
 
         } catch (ApiException e) {
             throw e;

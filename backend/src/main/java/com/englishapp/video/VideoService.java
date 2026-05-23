@@ -97,8 +97,8 @@ public class VideoService {
                 log.info("Video processed: {} — {}s, audio+thumbnail extracted", video.getTitle(), durationSec);
             } catch (Exception e) {
                 log.warn("FFmpeg processing failed for video {}: {}", videoId, e.getMessage());
-                video.setErrorMessage(e.getMessage());
-                video.setStatus(VideoStatus.FAILED);
+                try { storageService.delete(videosBucket, sourceKey); } catch (Exception ignored) {}
+                throw ApiException.badRequest("Video file could not be processed: " + e.getMessage());
             }
 
             video = videoRepository.save(video);
@@ -271,6 +271,7 @@ public class VideoService {
                 .cefrLevel(video.getCefrLevel())
                 .topic(video.getTopic())
                 .status(video.getStatus())
+                .errorMessage(video.getErrorMessage())
                 .viewCount(video.getViewCount())
                 .createdAt(video.getCreatedAt())
                 .summary(video.getSummary())

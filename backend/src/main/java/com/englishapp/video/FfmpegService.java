@@ -90,7 +90,6 @@ public class FfmpegService {
 
             return stdout.toString().trim();
         } catch (IOException | InterruptedException e) {
-            Thread.currentThread().interrupt();
             throw new RuntimeException("FFmpeg execution failed: " + e.getMessage(), e);
         }
     }

@@ -67,6 +67,7 @@ export const useProcessVideo = () => {
     mutationFn: (id: string) =>
       api.post(`/api/admin/videos/${id}/process`),
     onSuccess: (_, id) => {
+      qc.invalidateQueries({ queryKey: ['admin', 'videos'] })
       qc.invalidateQueries({ queryKey: ['admin', 'videos', id, 'status'] })
       toast.success('Processing started')
     },

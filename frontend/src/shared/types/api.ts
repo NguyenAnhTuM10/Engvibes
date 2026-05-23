@@ -104,6 +104,7 @@ export interface Video {
   cefrLevel: CefrLevel
   topic: string
   status: VideoStatus
+  errorMessage?: string | null
   viewCount: number
   createdAt?: string
   summary?: string | null
@@ -234,8 +235,8 @@ export interface RetellFeedback {
 
 export interface SpeakingQuestionResponse {
   question: string
-  suggestedVocab: string[]
-  collocations: string[]
+  suggestedVocab: string[] | null
+  collocations: string[] | null
   sampleOpening?: string | null
   structureTips?: string[] | null
 }
