@@ -1,13 +1,14 @@
 package com.englishapp.speak;
 
 import com.englishapp.ai.LlmClient;
+import com.englishapp.ai.WhisperClient;
+import com.englishapp.ai.WhisperResult;
 import com.englishapp.common.ApiException;
 import com.englishapp.common.ApiResponse;
 import com.englishapp.retell.RateLimitService;
 import com.englishapp.speak.dto.IeltsFeedback;
 import com.englishapp.speak.dto.IeltsFeedbackResponse;
 import com.englishapp.user.UserService;
-import com.englishapp.video.FfmpegService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -25,7 +26,7 @@ import java.util.UUID;
 public class FreeformSpeakController {
 
     private final LlmClient llmClient;
-    private final FfmpegService ffmpegService;
+    private final WhisperClient whisperClient;
     private final RateLimitService rateLimitService;
     private final UserService userService;
     private final ObjectMapper objectMapper;
@@ -50,18 +51,15 @@ public class FreeformSpeakController {
         }
 
         try {
-            byte[] rawBytes = audio.getBytes();
-            String originalFormat = resolveFormat(audio.getContentType(), audio.getOriginalFilename());
+            byte[] bytes = audio.getBytes();
+            String filename = audio.getOriginalFilename() != null ? audio.getOriginalFilename() : "audio.webm";
 
-            // gpt-audio-mini only accepts wav and mp3 — convert if needed
-            byte[] bytes = "wav".equals(originalFormat) || "mp3".equals(originalFormat)
-                    ? rawBytes
-                    : ffmpegService.convertToWav(rawBytes, originalFormat);
-            String audioFormat = "wav".equals(originalFormat) || "mp3".equals(originalFormat)
-                    ? originalFormat : "wav";
+            WhisperResult whisperResult = whisperClient.transcribe(bytes, filename, audio.getContentType());
+            String transcript = whisperResult != null && whisperResult.getText() != null
+                    ? whisperResult.getText().trim() : "";
 
-            String prompt = buildPrompt(situation, question, vocab, collocations);
-            String raw = llmClient.chatCompletionWithAudio(SYSTEM_PROMPT, prompt, bytes, audioFormat);
+            String prompt = buildPrompt(situation, question, vocab, collocations, transcript);
+            String raw = llmClient.chatCompletion(SYSTEM_PROMPT, prompt);
             IeltsFeedback feedback = objectMapper.readValue(extractJson(raw), IeltsFeedback.class);
 
             log.info("Speaking eval — user={} situation='{}' overall={}", userId, situation, feedback.overall());
@@ -84,55 +82,41 @@ public class FreeformSpeakController {
         }
     }
 
-    private String buildPrompt(String situation, String question, String vocab, String collocations) {
+    private String buildPrompt(String situation, String question, String vocab, String collocations, String transcript) {
         return """
-                You are an IELTS Speaking examiner evaluating a candidate's response.
-                Listen to the audio carefully — assess pronunciation, fluency, grammar, and vocabulary.
+                You are an IELTS Speaking examiner evaluating a candidate's spoken response.
 
                 SITUATION: %s
                 QUESTION: "%s"
                 SUGGESTED VOCABULARY: %s
                 SUGGESTED COLLOCATIONS: %s
 
+                CANDIDATE'S TRANSCRIPT:
+                "%s"
+
                 Return ONLY this JSON structure (no markdown):
                 {
-                  "transcript": "<verbatim transcription of what the candidate said>",
+                  "transcript": "<copy of the transcript above>",
                   "fluency": <0.0–9.0, one decimal, based on pace, hesitations, coherence>,
                   "grammar": <0.0–9.0, one decimal, accuracy and range of grammatical structures>,
                   "vocabulary": <0.0–9.0, one decimal, range, accuracy, and use of suggested words>,
-                  "pronunciation": <0.0–9.0, one decimal, clarity, intonation, stress>,
+                  "pronunciation": <0.0–9.0, one decimal, estimated from grammar/word choice patterns>,
                   "overall": <0.0–9.0, one decimal, weighted average>,
                   "feedback": "<2-3 sentences: one strength, one improvement tip specific to this situation>"
                 }
 
-                IELTS BAND DESCRIPTORS (use as reference):
-                9 = Expert, 8 = Very Good, 7 = Good, 6 = Competent, 5 = Modest, 4 = Limited, below 4 = struggling
-
+                IELTS BAND DESCRIPTORS: 9=Expert, 8=Very Good, 7=Good, 6=Competent, 5=Modest, 4=Limited
                 RULES:
                 - overall = (fluency*0.25 + grammar*0.25 + vocabulary*0.25 + pronunciation*0.25), round to 1 decimal
-                - If audio is silent or under 3 seconds: all scores 0, feedback encourages them to try speaking
+                - If transcript is empty or "(no speech detected)": all scores 0, feedback encourages them to try
                 - feedback must reference the specific situation, not be generic
                 """.formatted(
                 situation,
                 question,
                 vocab.isBlank() ? "none" : vocab,
-                collocations.isBlank() ? "none" : collocations
+                collocations.isBlank() ? "none" : collocations,
+                transcript.isEmpty() ? "(no speech detected)" : transcript
         );
-    }
-
-    private String resolveFormat(String contentType, String filename) {
-        if (contentType != null) {
-            if (contentType.contains("webm")) return "webm";
-            if (contentType.contains("mp4"))  return "mp4";
-            if (contentType.contains("mpeg")) return "mpeg";
-            if (contentType.contains("wav"))  return "wav";
-            if (contentType.contains("ogg"))  return "ogg";
-        }
-        if (filename != null) {
-            int dot = filename.lastIndexOf('.');
-            if (dot >= 0) return filename.substring(dot + 1).toLowerCase();
-        }
-        return "webm";
     }
 
     private String extractJson(String raw) {
