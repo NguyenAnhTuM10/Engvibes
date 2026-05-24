@@ -20,14 +20,17 @@ public class LlmClient {
     private final WebClient webClient;
     private final String model;
     private final String audioModel;
+    private final String realtimeModel;
 
     public LlmClient(
             @Value("${app.openai.base-url}") String baseUrl,
             @Value("${app.openai.api-key}") String apiKey,
             @Value("${app.openai.model}") String model,
-            @Value("${app.openai.audio-model}") String audioModel) {
+            @Value("${app.openai.audio-model}") String audioModel,
+            @Value("${app.openai.realtime-model}") String realtimeModel) {
         this.model = model;
         this.audioModel = audioModel;
+        this.realtimeModel = realtimeModel;
         this.webClient = WebClient.builder()
                 .baseUrl(baseUrl)
                 .defaultHeader("Authorization", "Bearer " + apiKey)
@@ -138,4 +141,60 @@ public class LlmClient {
         log.debug("GPT Audio response length: {} chars", content != null ? content.length() : 0);
         return content;
     }
+
+    /**
+     * Create an OpenAI Realtime session and return the ephemeral client_secret token.
+     * Browser uses this token to connect directly to wss://api.openai.com/v1/realtime.
+     */
+    public String getRealtimeToken(String instructions, String voice) {
+        ObjectMapper mapper = new ObjectMapper();
+
+        ObjectNode body = mapper.createObjectNode();
+        body.put("type", "realtime");
+        body.put("model", realtimeModel);
+        body.put("voice", voice);
+        body.put("instructions", instructions);
+
+        log.info("Creating realtime session — model={}", realtimeModel);
+
+        Map<?, ?> response = webClient.post()
+                .uri("/realtime/sessions")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(body)
+                .retrieve()
+                .onStatus(status -> status.isError(), resp ->
+                        resp.bodyToMono(String.class).map(err -> {
+                            log.error("Realtime session error [{}]: {}", resp.statusCode(), err);
+                            return new RuntimeException(
+                                    "Realtime session error "
+                                            + resp.statusCode()
+                                            + ": "
+                                            + err
+                            );
+                        }))
+                .bodyToMono(Map.class)
+                .block();
+
+        if (response == null) {
+            throw new RuntimeException("Realtime session returned null");
+        }
+
+        Map<?, ?> clientSecret = (Map<?, ?>) response.get("client_secret");
+
+        if (clientSecret == null) {
+            throw new RuntimeException("No client_secret in realtime session response");
+        }
+
+        String token = (String) clientSecret.get("value");
+
+        if (token == null || token.isBlank()) {
+            throw new RuntimeException("Empty realtime token");
+        }
+
+        log.info("Realtime token issued — model={}", realtimeModel);
+
+        return token;
+    }
+
+    public String getRealtimeModel() { return realtimeModel; }
 }

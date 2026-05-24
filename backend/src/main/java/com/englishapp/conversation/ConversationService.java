@@ -57,7 +57,7 @@ public class ConversationService {
     @Transactional(readOnly = true)
     public List<ScenarioResponse> getScenarios() {
         return Arrays.stream(ConversationScenario.values())
-                .map(s -> new ScenarioResponse(s.name(), s.displayName, s.description, s.aiRole, s.userGoal))
+                .map(s -> new ScenarioResponse(s.name(), s.displayName, s.description, s.aiRole, s.userGoal, s.openingLine))
                 .toList();
     }
 

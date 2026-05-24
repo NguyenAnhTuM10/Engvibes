@@ -49,3 +49,50 @@ export const useEndConversation = (sessionId: string) =>
         .then((r) => r.data),
     onError: (err: Error) => toast.error(err.message),
   })
+
+// ── Realtime conversation ─────────────────────────────────────────────────────
+
+export interface RealtimeTokenResponse {
+  token: string
+  model: string
+  scenarioId: string
+  scenarioDisplayName: string
+  aiRole: string
+  userGoal: string
+  openingLine: string
+}
+
+export interface ConversationReviewRequest {
+  scenarioId: string
+  turns: { role: 'user' | 'assistant'; text: string }[]
+  durationSec: number
+}
+
+export interface ConversationReviewResponse {
+  fluency: number
+  grammar: number
+  vocabulary: number
+  overall: number
+  strengths: string
+  improvements: string
+  encouragement: string
+  grammarNotes: { error: string; correction: string }[]
+}
+
+export const useGetRealtimeToken = () =>
+  useMutation({
+    mutationFn: (scenarioId: string) =>
+      api
+        .post<never, { data: RealtimeTokenResponse }>('/api/conversation/realtime-token', { scenarioId })
+        .then((r) => r.data),
+    onError: (err: Error) => toast.error('Failed to start conversation: ' + err.message),
+  })
+
+export const useConversationReview = () =>
+  useMutation({
+    mutationFn: (req: ConversationReviewRequest) =>
+      api
+        .post<never, { data: ConversationReviewResponse }>('/api/conversation/realtime-review', req)
+        .then((r) => r.data),
+    onError: (err: Error) => toast.error('Failed to get feedback: ' + err.message),
+  })

@@ -4,6 +4,7 @@ export interface ConversationScenario {
   description: string
   aiRole: string
   userGoal: string
+  openingLine: string
 }
 
 export interface HintResponse {

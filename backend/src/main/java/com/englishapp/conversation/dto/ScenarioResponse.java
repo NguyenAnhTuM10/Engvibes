@@ -5,5 +5,6 @@ public record ScenarioResponse(
         String displayName,
         String description,
         String aiRole,
-        String userGoal
+        String userGoal,
+        String openingLine
 ) {}

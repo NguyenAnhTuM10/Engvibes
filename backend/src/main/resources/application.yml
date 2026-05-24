@@ -74,5 +74,5 @@ app:
     base-url: ${OPENAI_BASE_URL:https://api.openai.com/v1}
     model: ${OPENAI_MODEL:gpt-4o-mini}
     audio-model: ${OPENAI_AUDIO_MODEL:gpt-audio-mini}
-    realtime-model: ${OPENAI_REALTIME_MODEL:gpt-realtime-mini}
+    realtime-model: ${OPENAI_REALTIME_MODEL:gpt-realtime-2}
 
