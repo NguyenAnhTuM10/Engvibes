@@ -64,7 +64,8 @@
       "PowerShell(docker stop englishapp-backend *)",
       "PowerShell(netstat *)",
       "PowerShell(Invoke-RestMethod -Uri \"http://localhost:8080/api/health\" | ConvertTo-Json)",
-      "PowerShell(Start-Process -FilePath \"java\" -ArgumentList \"-jar\",\"D:\\\\AAA\\\\Engvibes\\\\backend\\\\build\\\\libs\\\\backend-0.0.1-SNAPSHOT.jar\",\"--spring.profiles.active=local\" -WindowStyle Normal)"
+      "PowerShell(Start-Process -FilePath \"java\" -ArgumentList \"-jar\",\"D:\\\\AAA\\\\Engvibes\\\\backend\\\\build\\\\libs\\\\backend-0.0.1-SNAPSHOT.jar\",\"--spring.profiles.active=local\" -WindowStyle Normal)",
+      "PowerShell(Start-Process \"C:\\\\Program Files\\\\Docker\\\\Docker\\\\Docker Desktop.exe\"; Write-Output \"Docker Desktop đang khởi động...\")"
     ]
   }
 }

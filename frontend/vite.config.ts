@@ -9,11 +9,18 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  optimizeDeps: {
+    include: ['sockjs-client'],
+  },
   server: {
     proxy: {
-      '/api': 'http://localhost:8080',
+      '/api': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+      },
       '/ws': {
-        target: 'ws://localhost:8080',
+        target: 'http://localhost:8080',
+        changeOrigin: true,
         ws: true,
       },
     },

@@ -4,6 +4,8 @@ import {
   Upload, Play, Trash2, RefreshCw, ChevronLeft, ChevronRight,
   AlertCircle, CheckCircle2, Clock, Loader2, X,
 } from 'lucide-react'
+import { useQueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
 import PageHeader from '@/components/ui/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -15,6 +17,8 @@ import {
 } from '@/features/videos/adminApi'
 import type { Video, CefrLevel } from '@/shared/types/api'
 import { cn } from '@/lib/utils'
+import { useAdminPipelineWs } from '@/shared/hooks/useAdminPipelineWs'
+import type { PipelineNotification } from '@/shared/hooks/useAdminPipelineWs'
 
 const STATUS_CONFIG = {
   DRAFT:      { label: 'Draft',      cls: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300' },
@@ -22,6 +26,15 @@ const STATUS_CONFIG = {
   PUBLISHED:  { label: 'Published',  cls: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' },
   FAILED:     { label: 'Failed',     cls: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300' },
 }
+
+const PIPELINE_STEP_TYPES = new Set([
+  'PIPELINE_STARTED',
+  'PIPELINE_EXTRACTING_AUDIO',
+  'PIPELINE_TRANSCRIBING',
+  'PIPELINE_SAVING_SUBTITLES',
+  'PIPELINE_ENRICHING',
+  'PIPELINE_SUMMARIZING',
+])
 
 const CEFR_OPTIONS: CefrLevel[] = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2']
 const TOPIC_OPTIONS = ['food', 'travel', 'technology', 'education', 'sport', 'health', 'business', 'science', 'culture', 'other']
@@ -59,7 +72,7 @@ function UploadDialog({ onClose }: { onClose: () => void }) {
               <span>{upload.error?.message ?? 'Upload failed'}</span>
             </div>
           )}
-          {/* File picker */}
+
           <div>
             <Label>Video file (MP4)</Label>
             <div
@@ -155,14 +168,18 @@ function UploadDialog({ onClose }: { onClose: () => void }) {
 
 // ── Video row ─────────────────────────────────────────────────────────────────
 
-function VideoRow({ video }: { video: Video }) {
+interface VideoRowProps {
+  video: Video
+  progress: { title: string; message: string } | null
+}
+
+function VideoRow({ video, progress }: VideoRowProps) {
   const processVideo = useProcessVideo()
   const deleteVideo = useDeleteVideo()
   const isProcessing = video.status === 'PROCESSING'
 
   const { data: liveStatus } = useAdminVideoStatus(video.id, isProcessing)
   const displayStatus = liveStatus?.status ?? video.status
-
   const cfg = STATUS_CONFIG[displayStatus as keyof typeof STATUS_CONFIG] ?? STATUS_CONFIG.DRAFT
 
   return (
@@ -188,8 +205,8 @@ function VideoRow({ video }: { video: Video }) {
         </div>
       </td>
 
-      {/* Status */}
-      <td className="px-4 py-3 whitespace-nowrap">
+      {/* Status + live progress */}
+      <td className="px-4 py-3">
         <span className={cn('text-xs px-2 py-1 rounded-full font-medium flex items-center gap-1 w-fit', cfg.cls)}>
           {displayStatus === 'PROCESSING' && <Loader2 className="h-3 w-3 animate-spin" />}
           {displayStatus === 'PUBLISHED' && <CheckCircle2 className="h-3 w-3" />}
@@ -197,8 +214,20 @@ function VideoRow({ video }: { video: Video }) {
           {displayStatus === 'DRAFT' && <Clock className="h-3 w-3" />}
           {cfg.label}
         </span>
+
+        {/* Live pipeline step */}
+        {displayStatus === 'PROCESSING' && progress && (
+          <div className="mt-1.5 flex items-center gap-1.5">
+            <Loader2 className="h-3 w-3 animate-spin text-blue-500 shrink-0" />
+            <span className="text-xs text-blue-600 dark:text-blue-400 truncate max-w-[180px]" title={progress.message}>
+              {progress.title}
+            </span>
+          </div>
+        )}
+
         {(liveStatus?.errorMessage ?? video.errorMessage) && (
-          <p className="text-xs text-red-500 mt-1 max-w-[200px] line-clamp-2" title={liveStatus?.errorMessage ?? video.errorMessage ?? ''}>
+          <p className="text-xs text-red-500 mt-1 max-w-[200px] line-clamp-2"
+            title={liveStatus?.errorMessage ?? video.errorMessage ?? ''}>
             {liveStatus?.errorMessage ?? video.errorMessage}
           </p>
         )}
@@ -247,6 +276,29 @@ export default function AdminVideosPage() {
   const [page, setPage] = useState(0)
   const [showUpload, setShowUpload] = useState(false)
   const { data, isLoading, refetch } = useAdminVideos(page)
+  const qc = useQueryClient()
+
+  // videoId → current pipeline step title+message
+  const [videoProgress, setVideoProgress] = useState<Record<string, { title: string; message: string }>>({})
+
+  useAdminPipelineWs((msg: PipelineNotification) => {
+    const videoId = msg.data?.videoId
+    if (!videoId) return
+
+    if (PIPELINE_STEP_TYPES.has(msg.type)) {
+      setVideoProgress((prev) => ({ ...prev, [videoId]: { title: msg.title, message: msg.message } }))
+    } else if (msg.type === 'VIDEO_PUBLISHED') {
+      toast.success(msg.title, { description: msg.message })
+      setVideoProgress((prev) => { const n = { ...prev }; delete n[videoId]; return n })
+      qc.invalidateQueries({ queryKey: ['admin', 'videos'] })
+      qc.invalidateQueries({ queryKey: ['admin', 'videos', videoId, 'status'] })
+    } else if (msg.type === 'VIDEO_FAILED') {
+      toast.error(msg.title, { description: msg.message })
+      setVideoProgress((prev) => { const n = { ...prev }; delete n[videoId]; return n })
+      qc.invalidateQueries({ queryKey: ['admin', 'videos'] })
+      qc.invalidateQueries({ queryKey: ['admin', 'videos', videoId, 'status'] })
+    }
+  })
 
   return (
     <div className="space-y-4">
@@ -309,7 +361,13 @@ export default function AdminVideosPage() {
               </tr>
             </thead>
             <tbody>
-              {data.content.map((v) => <VideoRow key={v.id} video={v} />)}
+              {data.content.map((v) => (
+                <VideoRow
+                  key={v.id}
+                  video={v}
+                  progress={videoProgress[v.id] ?? null}
+                />
+              ))}
             </tbody>
           </table>
         )}
