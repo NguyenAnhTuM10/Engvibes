@@ -13,6 +13,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **Core flow:** User chọn video ngắn (30-60s) → 7-step learning loop:
 Warmup → Listen → Phrase Practice → Shadow (Whisper) → **Retell (AI coach ★)** → Speak → Quick Review.
 
+**Bonus feature:** Pronunciation Assessment — luyện phát âm từng từ/câu, so sánh IPA phoneme-by-phoneme, trả điểm + tips sửa lỗi realtime qua WebSocket.
+
 **Out of scope — KHÔNG làm:** OAuth/social login, user upload video, YouTube import, mobile app, social/leaderboard, payment, email verification, admin panel phức tạp, Azure Speech, microservices, GraphQL.
 
 ---
@@ -59,6 +61,9 @@ Warmup → Listen → Phrase Practice → Shadow (Whisper) → **Retell (AI coac
 | P-FE5-1 | Progress Dashboard (recharts — weekly/phoneme/vocab) | ✅ Done |
 | P-FE5-2 | HomePage daily challenge + History + Profile | ✅ Done |
 | P-FE6 | Error boundary + 429 handling + demo login | ✅ Done |
+| P-PRON-BE | Pronunciation Assessment backend — entities, async pipeline (Whisper→Python→WS), REST API | ✅ Done |
+| P-PRON-FE | Pronunciation Assessment frontend — PhonemeDisplay, ScorePanel, FeedbackPanel, WebSocket hook, PronunciationPage | ✅ Done |
+| P-PRON-AI | Python FastAPI microservice — IPA conversion (eng_to_ipa), Levenshtein phoneme alignment, scoring, tips dict | ✅ Done |
 
 **Files đã tạo (backend):**
 - `EnglishAppApplication.java`
@@ -86,6 +91,10 @@ Warmup → Listen → Phrase Practice → Shadow (Whisper) → **Retell (AI coac
 - `speak/dto/`: `SpeakFeedback`, `SpeakingQuestionResponse`
 - `resources/data/cmudict.txt` — sample ~200 common words in CMU format (graceful fallback if missing)
 - `seed/oxford_5000.csv` — ~300 từ mẫu pipe-separated `word|cefr_level|pos|ipa|phonemes|definition`
+- `pronunciation/`: `PronunciationSession`, `PronunciationAttempt`, `PronunciationSessionRepository`, `PronunciationAttemptRepository`
+- `pronunciation/`: `PronunciationAiClient` (WebClient → Python :8000), `PronunciationService` (CRUD sync), `PronunciationPipeline` (`@Async("pronunciationExecutor")` + `NOT_SUPPORTED`), `PronunciationController`
+- `pronunciation/dto/`: `CreateSessionRequest`, `SessionResponse`, `AttemptResponse`, `PhonemeMatch`, `AnalyzeRequest`, `AnalyzeResult`, `PronunciationProgress`
+- `db/migration/V19__create_pronunciation.sql` — bảng `pronunciation_sessions` + `pronunciation_attempts` (JSONB `phoneme_detail`)
 
 **Files đã tạo (frontend):**
 - `src/app/`: `App.tsx`, `providers.tsx` (QueryClient + Router + ThemeProvider + Toaster), `router.tsx` (lazy routes)
@@ -100,6 +109,13 @@ Warmup → Listen → Phrase Practice → Shadow (Whisper) → **Retell (AI coac
 - `src/pages/LoginPage.tsx` — Login form (RHF + zod)
 - `src/pages/RegisterPage.tsx` — Register form + CEFR Select
 - `src/pages/HomePage.tsx` — Welcome + stat cards + action cards
+- `src/features/pronunciation/types.ts` — `PhonemeMatch`, `AttemptResult`, `PronunciationSession`, `PronunciationProgress`, `ProcessingStatus`
+- `src/features/pronunciation/api.ts` — `useCreateSession`, `useSession`, `useAttempts`, `useSubmitAttempt` (React Query)
+- `src/features/pronunciation/hooks/usePronunciationWs.ts` — STOMP WebSocket listener cho `/topic/pronunciation/{sessionId}`
+- `src/features/pronunciation/components/PhonemeDisplay.tsx` — tiles màu xanh/đỏ per phoneme, hiện actual bên dưới khi sai
+- `src/features/pronunciation/components/ScorePanel.tsx` — 3 score bars (overall/accuracy/fluency) với màu ngưỡng
+- `src/features/pronunciation/components/FeedbackPanel.tsx` — tips per phoneme + transcript display
+- `src/pages/PronunciationPage.tsx` — full page: word picker (5 nhóm), recorder, realtime progress bar, results, retry, history
 
 ---
 
@@ -107,7 +123,7 @@ Warmup → Listen → Phrase Practice → Shadow (Whisper) → **Retell (AI coac
 
 ### Infrastructure
 ```powershell
-# Start services (Postgres:5433, Redis:6379, MinIO:9000/9001)
+# Start ALL services (Postgres:5433, Redis:6379, MinIO:9000/9001, PronunciationService:8000)
 docker compose up -d
 
 # Stop giữ data
@@ -115,6 +131,18 @@ docker compose down
 
 # Stop + xóa data volumes (reset DB hoàn toàn)
 docker compose down -v
+```
+
+### Pronunciation Service (Python FastAPI — chạy local không cần Docker)
+```powershell
+cd pronunciation-service
+pip install fastapi uvicorn eng-to-ipa pydantic   # lần đầu
+python -m uvicorn main:app --port 8000 --reload   # dev mode
+
+# Smoke test
+curl http://localhost:8000/health
+curl -X POST http://localhost:8000/analyze -H "Content-Type: application/json" `
+  -d '{"transcript":"tink","target_text":"think","target_ipa":null}'
 ```
 
 ### Backend
@@ -148,7 +176,9 @@ npx vitest run       # run tests once
 http://localhost:8080/api/health       → {"data":{"status":"UP",...}}
 http://localhost:8080/swagger-ui.html  → Swagger UI
 http://localhost:5173                  → React HomePage
+http://localhost:5173/pronunciation    → Pronunciation Practice page
 http://localhost:9001                  → MinIO Console (minioadmin/minioadmin)
+http://localhost:8000/health           → Python pronunciation service
 ```
 
 ---
@@ -158,22 +188,26 @@ http://localhost:9001                  → MinIO Console (minioadmin/minioadmin)
 ### Monorepo layout
 ```
 D:\AAA\Engvibes\
-├── docker-compose.yml    ← postgres:5433, redis:6379, minio:9000
+├── docker-compose.yml        ← postgres:5433, redis:6379, minio:9000, pronunciation-service:8000
 ├── .env.example
-├── backend/              ← Spring Boot 3.3 / Java 21 / Gradle Groovy
+├── pronunciation-service/    ← Python FastAPI — IPA analysis microservice
+│   ├── main.py               ← /analyze endpoint + phoneme alignment + tips dict
+│   ├── requirements.txt      ← fastapi, uvicorn, eng-to-ipa, pydantic
+│   └── Dockerfile
+├── backend/                  ← Spring Boot 3.3 / Java 21 / Gradle Groovy
 │   ├── build.gradle
 │   └── src/main/
 │       ├── java/com/englishapp/
 │       └── resources/
-│           ├── application.yml           ← env-driven config
+│           ├── application.yml           ← env-driven config (incl. pronunciation-service.url)
 │           ├── application-local.yml     ← dev credentials (gitignored)
-│           └── db/migration/             ← Flyway V1__, V2__, ...
-└── frontend/             ← React 18 + Vite 5 + TypeScript strict
+│           └── db/migration/             ← Flyway V1__–V19__
+└── frontend/                 ← React 18 + Vite 5 + TypeScript strict
     └── src/
-        ├── app/          ← App.tsx, providers.tsx (QueryClient+Router), router.tsx
-        ├── pages/        ← Route-level components
-        ├── features/     ← Feature modules (auth, videos, session, retell, ...)
-        └── shared/       ← api/client.ts, lib/utils.ts, hooks/, types/
+        ├── app/              ← App.tsx, providers.tsx (QueryClient+Router), router.tsx
+        ├── pages/            ← Route-level components
+        ├── features/         ← Feature modules (auth, videos, session, retell, pronunciation, ...)
+        └── shared/           ← api/client.ts, lib/utils.ts, hooks/, types/
 ```
 
 ### Backend package-by-feature
@@ -203,7 +237,13 @@ com.englishapp/
 ├── shadow/     ShadowAttempt + WordDiffUtil + CmuDictService + PhonemeDetectionService + UserPhonemeStats
 ├── retell/     RetellAttempt + RetellService (scaffold L1-L4, Whisper, LLM eval) + RateLimitService (Redis INCR)
 ├── speak/      SpeakAttempt + SpeakController (Whisper + LLM eval, 50/day limit)
-└── recommend/  UserVideoInteraction, UserFeatureService, ContentBasedRecommender, RecommendController
+├── recommend/  UserVideoInteraction, UserFeatureService, ContentBasedRecommender, RecommendController
+└── pronunciation/  PronunciationSession, PronunciationAttempt, PronunciationService (CRUD)
+                    PronunciationPipeline (@Async "pronunciationExecutor" + NOT_SUPPORTED)
+                    PronunciationAiClient (WebClient → Python :8000/analyze)
+                    PronunciationController (/api/pronunciation — trả 202 + WS push)
+                    dto/: CreateSessionRequest, SessionResponse, AttemptResponse,
+                          PhonemeMatch, AnalyzeRequest, AnalyzeResult, PronunciationProgress
 ```
 
 ### Request / data flow
@@ -214,7 +254,10 @@ React → axios (shared/api/client.ts) → Spring Boot :8080
         React Hook Form + Zod                                  → Redis (cache)
                                                                → MinIO (files)
                                                                → OpenAI (via WebClient, qua ai/)
+                                                               → Python :8000 (via PronunciationAiClient)
 WebSocket: @stomp/stompjs → /ws (STOMP) → WebSocketConfig
+  - /topic/admin/pipeline          → video processing status (admin)
+  - /topic/pronunciation/{id}      → pronunciation attempt progress (per-session)
 ```
 
 ---
@@ -250,9 +293,34 @@ WebSocket: @stomp/stompjs → /ws (STOMP) → WebSocketConfig
 |---|---|
 | Video summary, key points, warmup, collocations, speaking questions | YES (forever, per video) |
 | Whisper transcribe, Retell eval, Speak eval | NO (personalized) |
+| Pronunciation IPA (targetIpa) | YES — back-fill vào `pronunciation_sessions.target_ipa` sau attempt đầu, dùng lại cho các attempt sau |
 
 ### Phoneme weakness detection
 Dùng CMU Pronouncing Dictionary (CSV ~134k words). Khi shadow: Whisper transcribe → so word-by-word → word sai/thiếu → lookup CMU phonemes → đếm frequency → top 5 = "weak phonemes". Accuracy ~60-70%, đủ cho đồ án. KHÔNG dùng Azure Speech.
+
+### Pronunciation Assessment flow
+```
+POST /api/pronunciation/sessions         → tạo session, trả sessionId
+POST /api/pronunciation/sessions/{id}/attempt (audio file)
+  → 202 ngay + attemptId
+  → PronunciationPipeline.processAsync() chạy background:
+      1. Upload audio → MinIO (pronunciation/{sessionId}/{attemptId}.webm)
+      2. Whisper transcribe → transcript
+      3. WS push: TRANSCRIBED
+      4. POST http://localhost:8000/analyze → AnalyzeResult (IPA comparison + score)
+      5. Save PronunciationAttempt (phoneme_detail JSONB)
+      6. WS push: COMPLETED {result}
+WebSocket topic: /topic/pronunciation/{sessionId}
+WS message types: PROCESSING (10/25/65/85%) → TRANSCRIBED → COMPLETED | FAILED
+```
+
+### Python pronunciation-service internals
+- `eng_to_ipa.convert(word)` → IPA string. Từ không biết: trả `*word` (strip dấu `*`).
+- Tách IPA → phonemes: xử lý digraphs (`tʃ`, `dʒ`) và diphthongs (`aɪ`, `eɪ`...) trước single chars.
+- Alignment: Levenshtein edit distance DP → traceback → list `(expected, actual)` pairs.
+- Scoring: `accuracy = matched/total_expected * 100`; `fluency = 85 if len(actual) >= 0.8*total else proportional`; `overall = 0.7*accuracy + 0.3*fluency`.
+- TIPS dict: ~30 entries dạng `(expected_phoneme, actual_phoneme) → tip string`. Thiếu entry → generic tip.
+- Known quirk: từ gibberish (không trong eng_to_ipa dict) → score ~25 thay vì 0, acceptable MVP.
 
 ---
 
@@ -262,6 +330,7 @@ Dùng CMU Pronouncing Dictionary (CSV ~134k words). Khi shadow: Whisper transcri
 - DB: `jdbc:postgresql://localhost:**5433**/englishapp` (port 5433, KHÔNG phải 5432)
 - Redis: `redis://localhost:6379`
 - MinIO: `http://localhost:9000`
+- Pronunciation service: `http://localhost:8000` (default trong `application.yml`, không cần override nếu chạy local)
 
 `frontend/.env` (gitignored):
 ```
@@ -273,11 +342,10 @@ VITE_WS_URL=ws://localhost:8080/ws
 
 ## Phiên tiếp theo — TODO & Context cần biết
 
-### Việc cần làm ngay (theo thứ tự)
-1. **P-FE1-2** — Main layout + Sidebar navigation (AppLayout, AppHeader, placeholder pages)
-2. **P-FE1-3** — Vocab search + Deck list + Deck detail page
-3. **P-FE1-4** — Flashcard Review session UI (card flip + FSRS rating)
-4. **Khi có OPENAI_API_KEY**: set vào `application-local.yml` → test pipeline thật với video tiếng Anh thật
+### Việc cần làm (nếu có)
+1. **Khi có OPENAI_API_KEY**: set vào `application-local.yml` → test pronunciation pipeline thật với audio thật
+2. **Mở rộng TIPS dict** trong `pronunciation-service/main.py` — thêm phoneme pairs tiếng Việt hay mắc
+3. **Vocab deck integration**: load từ deck flashcard của user thay vì hardcode word groups trong PronunciationPage
 
 ### Demo profile
 - Chạy: `java -jar backend/build/libs/backend-0.0.1-SNAPSHOT.jar --spring.profiles.active=local,demo`
@@ -372,6 +440,10 @@ public Result processWithExternalService(UUID id) {
 | GET | `/api/stats/phonemes` | JWT | Phoneme error rates (min 5 attempts) |
 | GET | `/api/stats/vocab-growth` | JWT | Cumulative vocab count by CEFR over time |
 | POST | `/api/events` | JWT | Batch track user behavior events (async) |
+| POST | `/api/pronunciation/sessions` | JWT | Tạo pronunciation session cho từ/câu |
+| GET | `/api/pronunciation/sessions/{id}` | JWT | Session info (targetIpa, bestScore, attemptCount) |
+| GET | `/api/pronunciation/sessions/{id}/attempts` | JWT | Lịch sử attempts (completed only) |
+| POST | `/api/pronunciation/sessions/{id}/attempt` | JWT | Submit audio → 202 + attemptId, kết quả qua WS |
 
 ### VideoResponse enrichment fields (có sau khi PUBLISHED)
 ```json
