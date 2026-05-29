@@ -51,6 +51,7 @@ TIPS: dict[tuple[str, str], str] = {
     ("l", "r"): "For /l/, tap your tongue tip on the ridge just behind your upper teeth.",
     # V vs B/W
     ("v", "b"): "For /v/, rest your upper TEETH on your lower LIP and push air through. Don't close your lips.",
+    ("v", "w"): "For /v/, rest your upper teeth on your lower lip — don't round your lips like /w/.",
     ("w", "v"): "For /w/, round your lips — keep teeth away from your lip.",
     ("f", "p"): "For /f/, upper teeth touch lower lip. Don't close your lips like /p/.",
     # Vowels
