@@ -21,4 +21,15 @@ public class AsyncConfig {
         executor.initialize();
         return executor;
     }
+
+    @Bean(name = "pronunciationExecutor")
+    public Executor pronunciationExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(2);
+        executor.setMaxPoolSize(6);   // pronunciation thường ngắn hơn video pipeline
+        executor.setQueueCapacity(20);
+        executor.setThreadNamePrefix("pron-pipe-");
+        executor.initialize();
+        return executor;
+    }
 }

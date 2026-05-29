@@ -75,4 +75,6 @@ app:
     model: ${OPENAI_MODEL:gpt-4o-mini}
     audio-model: ${OPENAI_AUDIO_MODEL:gpt-audio-mini}
     realtime-model: ${OPENAI_REALTIME_MODEL:gpt-realtime-2}
+  pronunciation-service:
+    url: ${PRONUNCIATION_SERVICE_URL:http://localhost:8000}
 

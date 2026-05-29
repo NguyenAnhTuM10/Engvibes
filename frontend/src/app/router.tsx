@@ -18,6 +18,7 @@ const ReviewPage = lazy(() => import('@/pages/ReviewPage'))
 const VideoWatchPage = lazy(() => import('@/pages/VideoWatchPage'))
 const SpeakPracticePage = lazy(() => import('@/pages/SpeakPracticePage'))
 const ConversationPage = lazy(() => import('@/pages/ConversationPage'))
+const PronunciationPage = lazy(() => import('@/pages/PronunciationPage'))
 
 function PageLoader() {
   return (
@@ -66,6 +67,7 @@ const router = createBrowserRouter([
       { path: 'profile', element: <Wrap><ProfilePage /></Wrap> },
       { path: 'speak', element: <Wrap><SpeakPracticePage /></Wrap> },
       { path: 'conversation', element: <Wrap><ConversationPage /></Wrap> },
+      { path: 'pronunciation', element: <Wrap><PronunciationPage /></Wrap> },
       {
         path: 'admin/videos',
         element: (

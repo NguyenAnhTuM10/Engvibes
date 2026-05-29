@@ -12,6 +12,7 @@ import {
   ChevronRight,
   Mic,
   MessageSquare,
+  AudioLines,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -31,6 +32,7 @@ const navItems: NavItem[] = [
   { label: 'Home', href: '/', icon: <Home className="h-4 w-4" /> },
   { label: 'Videos', href: '/videos', icon: <Play className="h-4 w-4" /> },
   { label: 'Speaking', href: '/speak', icon: <Mic className="h-4 w-4" /> },
+  { label: 'Pronunciation', href: '/pronunciation', icon: <AudioLines className="h-4 w-4" /> },
   { label: 'Conversation', href: '/conversation', icon: <MessageSquare className="h-4 w-4" /> },
   { label: 'Decks', href: '/decks', icon: <BookOpen className="h-4 w-4" /> },
   { label: 'Progress', href: '/progress', icon: <TrendingUp className="h-4 w-4" /> },
