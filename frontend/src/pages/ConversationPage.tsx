@@ -19,20 +19,8 @@ type Stage = 'pick' | 'connecting' | 'active' | 'reviewing' | 'result'
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const SAMPLE_RATE = 24000
-// Voice: spec khuyến nghị 'marin' hoặc 'cedar' cho chất lượng tốt nhất.
-const REALTIME_VOICE = 'marin'
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function buildInstructions(scenario: ConversationScenario): string {
-  return `You are ${scenario.aiRole}, helping an English learner (B1-B2) practice real conversation. ` +
-      `SCENARIO: ${scenario.description} ` +
-      `LEARNER'S GOAL: ${scenario.userGoal} ` +
-      `RULES: Speak naturally as your character. Keep each response to 1-3 sentences. ` +
-      `Be warm, encouraging, and supportive. Gently rephrase major grammar mistakes naturally. ` +
-      `Start with: "${scenario.openingLine}". ` +
-      `After 5-6 user turns, wrap up naturally.`
-}
+// T3.1 — Voice + instructions do SERVER sở hữu (application.yml + proxy).
+// Client KHÔNG set voice/instructions/model nữa; proxy strip nếu gửi.
 
 // ── Audio helpers ─────────────────────────────────────────────────────────────
 
@@ -345,11 +333,12 @@ export default function ConversationPage() {
           break
 
         case 'session.created':
+          // T3.1 — Client CHỈ set audio format (cần cho mic PCM).
+          // voice/instructions/model do server set qua proxy.sendServerSessionUpdate.
           ws.send(JSON.stringify({
             type: 'session.update',
             session: {
               type: 'realtime',
-              model: 'gpt-realtime-2',
               output_modalities: ['audio'],
               audio: {
                 input: {
@@ -363,10 +352,8 @@ export default function ConversationPage() {
                 output: {
                   // API yêu cầu 'rate' — thiếu sẽ lỗi missing_required_parameter.
                   format: { type: 'audio/pcm', rate: SAMPLE_RATE },
-                  voice: REALTIME_VOICE,
                 },
               },
-              instructions: buildInstructions(scenario),
             },
           }))
           break

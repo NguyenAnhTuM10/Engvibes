@@ -32,6 +32,10 @@ public class ConversationController {
     private final UserService userService;
     private final ObjectMapper objectMapper;
 
+    // T3.1 — Realtime voice single-source: cùng config với proxy.
+    @org.springframework.beans.factory.annotation.Value("${app.openai.realtime-voice:alloy}")
+    private String realtimeVoice;
+
     private static final String REVIEW_SYSTEM_PROMPT =
             "You are an English language coach. Return only valid JSON, no markdown.";
 
@@ -42,7 +46,7 @@ public class ConversationController {
             @Valid @RequestBody RealtimeTokenRequest req) {
         ConversationScenario scenario = parseScenario(req.scenarioId());
         String instructions = scenario.buildRealtimeInstructions();
-        String token = llmClient.getRealtimeToken(instructions, "alloy");
+        String token = llmClient.getRealtimeToken(instructions, realtimeVoice);
         return ApiResponse.ok(new RealtimeTokenResponse(
                 token,
                 llmClient.getRealtimeModel(),
