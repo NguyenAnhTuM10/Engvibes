@@ -15,7 +15,7 @@ import {
 import {
   Tabs, TabsContent, TabsList, TabsTrigger,
 } from '@/components/ui/tabs'
-import { ArrowLeft, Upload, Play, CheckCircle2, AlertCircle } from 'lucide-react'
+import { ArrowLeft, Upload, Play, CheckCircle2, AlertCircle, Gamepad2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 export default function VocabDeckPage() {
@@ -39,6 +39,13 @@ export default function VocabDeckPage() {
         </div>
         <div className="flex gap-2">
           <ImportDialog deckId={id!} />
+          <Button
+            variant="outline"
+            onClick={() => navigate(`/vocab/${id}/games`)}
+            className="gap-2"
+          >
+            <Gamepad2 className="h-4 w-4" /> Games
+          </Button>
           <Button
             disabled={dueCount === 0}
             onClick={() => navigate(`/vocab/${id}/review`)}

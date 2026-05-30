@@ -22,6 +22,7 @@ const PronunciationPage = lazy(() => import('@/pages/PronunciationPage'))
 const VocabPage       = lazy(() => import('@/pages/VocabPage'))
 const VocabDeckPage   = lazy(() => import('@/pages/VocabDeckPage'))
 const VocabReviewPage = lazy(() => import('@/pages/VocabReviewPage'))
+const VocabGamesPage  = lazy(() => import('@/pages/VocabGamesPage'))
 
 function PageLoader() {
   return (
@@ -74,6 +75,7 @@ const router = createBrowserRouter([
       { path: 'vocab', element: <Wrap><VocabPage /></Wrap> },
       { path: 'vocab/:id', element: <Wrap><VocabDeckPage /></Wrap> },
       { path: 'vocab/:id/review', element: <Wrap><VocabReviewPage /></Wrap> },
+      { path: 'vocab/:id/games',  element: <Wrap><VocabGamesPage /></Wrap> },
       {
         path: 'admin/videos',
         element: (
