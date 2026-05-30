@@ -9,12 +9,9 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 import java.util.UUID;
@@ -32,30 +29,12 @@ public class ConversationController {
     private final UserService userService;
     private final ObjectMapper objectMapper;
 
-    // T3.1 — Realtime voice single-source: cùng config với proxy.
-    @org.springframework.beans.factory.annotation.Value("${app.openai.realtime-voice:alloy}")
-    private String realtimeVoice;
-
     private static final String REVIEW_SYSTEM_PROMPT =
             "You are an English language coach. Return only valid JSON, no markdown.";
 
     // ── Realtime endpoints ─────────────────────────────────────────────────────
-
-    @PostMapping("/realtime-token")
-    public ApiResponse<RealtimeTokenResponse> getRealtimeToken(
-            @Valid @RequestBody RealtimeTokenRequest req) {
-        ConversationScenario scenario = parseScenario(req.scenarioId());
-        String instructions = scenario.buildRealtimeInstructions();
-        String token = llmClient.getRealtimeToken(instructions, realtimeVoice);
-        return ApiResponse.ok(new RealtimeTokenResponse(
-                token,
-                llmClient.getRealtimeModel(),
-                req.scenarioId(),
-                scenario.displayName,
-                scenario.aiRole,
-                scenario.userGoal,
-                scenario.openingLine));
-    }
+    // Realtime conversation chạy qua WS proxy (/ws/conversation). REST chỉ còn:
+    // scenarios (list), realtime-review (chấm), history + detail (xem lại).
 
     /**
      * T2.2 — Chấm review dựa trên transcript SERVER-OBSERVED, không nhận từ client.
@@ -180,25 +159,6 @@ public class ConversationController {
     @GetMapping("/{sessionId}/detail")
     public ApiResponse<ConversationSession> sessionDetail(@PathVariable UUID sessionId) {
         return ApiResponse.ok(realtimeService.getOwnedSession(sessionId, currentUserId()));
-    }
-
-    @PostMapping("/start")
-    @ResponseStatus(HttpStatus.CREATED)
-    public ApiResponse<ConversationSessionResponse> startSession(
-            @Valid @RequestBody StartConversationRequest request) {
-        return ApiResponse.ok(conversationService.startSession(currentUserId(), request.scenarioId()));
-    }
-
-    @PostMapping("/{sessionId}/turn")
-    public ApiResponse<ConversationTurnResponse> processTurn(
-            @PathVariable UUID sessionId,
-            @RequestParam MultipartFile audio) {
-        return ApiResponse.ok(conversationService.processTurn(sessionId, currentUserId(), audio));
-    }
-
-    @PostMapping("/{sessionId}/end")
-    public ApiResponse<ConversationEndResponse> endSession(@PathVariable UUID sessionId) {
-        return ApiResponse.ok(conversationService.endSession(sessionId, currentUserId()));
     }
 
     private UUID currentUserId() {
