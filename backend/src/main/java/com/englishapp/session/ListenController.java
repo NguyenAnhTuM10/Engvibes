@@ -10,6 +10,7 @@ import com.englishapp.session.dto.AddVocabRequest;
 import com.englishapp.user.UserService;
 import com.englishapp.video.dto.SubtitleSegmentResponse;
 import com.englishapp.video.subtitle.SubtitleService;
+import com.englishapp.vocab.DictionaryClient;
 import com.englishapp.vocab.VocabMapper;
 import com.englishapp.vocab.VocabRepository;
 import com.englishapp.vocab.dto.VocabResponse;
@@ -31,6 +32,7 @@ public class ListenController {
     private final SubtitleService subtitleService;
     private final VocabRepository vocabRepository;
     private final VocabMapper vocabMapper;
+    private final DictionaryClient dictionaryClient;
     private final CardService cardService;
     private final UserService userService;
 
@@ -68,11 +70,11 @@ public class ListenController {
     public ApiResponse<VocabResponse> getVocabInfo(@PathVariable UUID sessionId,
                                                    @RequestParam String word) {
         requireSession(sessionId, currentUserId());
-        return ApiResponse.ok(
-                vocabRepository.findFirstByWordIgnoreCase(word)
-                        .map(vocabMapper::toVocabResponse)
-                        .orElse(null)
-        );
+        // 1. Tra vocab_entries (seed) — 2. fallback dictionaryapi.dev (cache Redis)
+        VocabResponse result = vocabRepository.findFirstByWordIgnoreCase(word)
+                .map(vocabMapper::toVocabResponse)
+                .orElseGet(() -> dictionaryClient.lookup(word).orElse(null));
+        return ApiResponse.ok(result);
     }
 
     private LearningSession requireSession(UUID sessionId, UUID userId) {
