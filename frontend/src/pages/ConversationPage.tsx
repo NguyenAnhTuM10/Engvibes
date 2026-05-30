@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useRef, useEffect, useCallback } from 'react'
 import { Mic, MicOff, PhoneOff, Loader2, Volume2, ArrowLeft, RotateCcw, ArrowRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -6,15 +6,7 @@ import PageHeader from '@/components/ui/PageHeader'
 import { useScenarios, useConversationReview, type ConversationReviewResponse } from '@/features/conversation/api'
 import type { ConversationScenario } from '@/features/conversation/types'
 import { useAuthStore } from '@/features/auth/store'
-
-// ── Types ─────────────────────────────────────────────────────────────────────
-
-interface Message {
-  role: 'user' | 'assistant'
-  text: string
-}
-
-type Stage = 'pick' | 'connecting' | 'active' | 'reviewing' | 'result'
+import { useConversationStore } from '@/features/conversation/store'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -233,13 +225,22 @@ function ResultPanel({
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function ConversationPage() {
-  const [stage, setStage] = useState<Stage>('pick')
-  const [sessionInfo, setSessionInfo] = useState<ConversationScenario | null>(null)
-  const [messages, setMessages] = useState<Message[]>([])
-  const [isAiSpeaking, setIsAiSpeaking] = useState(false)
-  const [isMuted, setIsMuted] = useState(false)
-  const [elapsedSec, setElapsedSec] = useState(0)
-  const [feedback, setFeedback] = useState<ConversationReviewResponse | null>(null)
+  // T3.2 — render-affecting state ở Zustand; refs imperative ở useRef.
+  const stage         = useConversationStore((s) => s.stage)
+  const sessionInfo   = useConversationStore((s) => s.sessionInfo)
+  const messages      = useConversationStore((s) => s.messages)
+  const isAiSpeaking  = useConversationStore((s) => s.isAiSpeaking)
+  const isMuted       = useConversationStore((s) => s.isMuted)
+  const elapsedSec    = useConversationStore((s) => s.elapsedSec)
+  const feedback      = useConversationStore((s) => s.feedback)
+  const setStage        = useConversationStore((s) => s.setStage)
+  const setSessionInfo  = useConversationStore((s) => s.setSessionInfo)
+  const addMessage      = useConversationStore((s) => s.addMessage)
+  const setAiSpeaking   = useConversationStore((s) => s.setAiSpeaking)
+  const setMuted        = useConversationStore((s) => s.setMuted)
+  const setElapsedSec   = useConversationStore((s) => s.setElapsedSec)
+  const setFeedback     = useConversationStore((s) => s.setFeedback)
+  const resetStore      = useConversationStore((s) => s.reset)
 
   const wsRef           = useRef<WebSocket | null>(null)
   const audioCtxRef     = useRef<AudioContext | null>(null)
@@ -301,10 +302,9 @@ export default function ConversationPage() {
   }, [])
 
   const startConversation = useCallback(async (scenario: ConversationScenario) => {
+    resetStore()                 // clear messages/elapsed/feedback/mute từ phiên trước
     setSessionInfo(scenario)
     setStage('connecting')
-    setMessages([])
-    setElapsedSec(0)
 
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
     streamRef.current = stream
@@ -381,13 +381,13 @@ export default function ConversationPage() {
           // (code cũ dùng response.audio_transcript.done — không tồn tại).
         case 'response.output_audio_transcript.done':
           if (data.transcript?.trim()) {
-            setMessages((prev) => [...prev, { role: 'assistant', text: data.transcript }])
+            addMessage({ role: 'assistant', text: data.transcript })
           }
           break
 
           // ── Lifecycle của response ──────────────────────────────────────────
         case 'response.created':
-          setIsAiSpeaking(true)
+          setAiSpeaking(true)
           break
 
         case 'response.output_item.added':
@@ -398,7 +398,7 @@ export default function ConversationPage() {
           break
 
         case 'response.done':
-          setIsAiSpeaking(false)
+          setAiSpeaking(false)
           activeResponseItemRef.current = null
           break
 
@@ -407,7 +407,7 @@ export default function ConversationPage() {
         case 'input_audio_buffer.speech_started': {
           // Dừng ngay audio AI đang phát.
           playerRef.current?.stopAll()
-          setIsAiSpeaking(false)
+          setAiSpeaking(false)
           // Báo server cắt phần audio chưa phát khỏi conversation,
           // để AI biết nó bị ngắt ở đâu.
           const itemId = activeResponseItemRef.current
@@ -426,7 +426,7 @@ export default function ConversationPage() {
           // ── Transcript của user ─────────────────────────────────────────────
         case 'conversation.item.input_audio_transcription.completed':
           if (data.transcript?.trim()) {
-            setMessages((prev) => [...prev, { role: 'user', text: data.transcript }])
+            addMessage({ role: 'user', text: data.transcript })
           }
           break
 
@@ -563,7 +563,7 @@ export default function ConversationPage() {
                   if (tracks) {
                     const next = !isMuted
                     tracks.forEach((t) => { t.enabled = !next })
-                    setIsMuted(next)
+                    setMuted(next)
                   }
                 }}
                 className={cn(
