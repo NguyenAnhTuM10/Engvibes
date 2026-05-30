@@ -1,7 +1,5 @@
 package com.englishapp.pronunciation;
 
-import com.englishapp.ai.WhisperClient;
-import com.englishapp.ai.WhisperResult;
 import com.englishapp.pronunciation.dto.AnalyzeResult;
 import com.englishapp.pronunciation.dto.AttemptResponse;
 import com.englishapp.pronunciation.dto.PronunciationProgress;
@@ -24,7 +22,6 @@ import java.util.UUID;
 public class PronunciationPipeline {
 
     private final PronunciationService pronunciationService;
-    private final WhisperClient whisperClient;
     private final PronunciationAiClient aiClient;
     private final StorageService storageService;
     private final SimpMessagingTemplate ws;
@@ -33,10 +30,10 @@ public class PronunciationPipeline {
     private String recordingsBucket;
 
     /**
-     * Async pipeline: Whisper → Python analysis → save → WS push.
-     *
-     * Dùng NOT_SUPPORTED để tránh rollback-only khi external service ném exception
-     * (xem BUG pattern trong CLAUDE.md).
+     * Async pipeline: upload → wav2vec2 phoneme analysis → save → WS push.
+     * Bỏ Whisper: Python service nhận audio trực tiếp, dùng wav2vec2 để tránh
+     * ASR auto-correct che giấu lỗi phát âm.
+     * Dùng NOT_SUPPORTED tránh rollback-only (xem BUG pattern trong CLAUDE.md).
      */
     @Async("pronunciationExecutor")
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
@@ -53,19 +50,18 @@ public class PronunciationPipeline {
             storageService.upload(recordingsBucket, audioKey,
                     new ByteArrayInputStream(audioBytes), audioBytes.length, contentType);
 
-            // ── Bước 2: Whisper transcription ───────────────────────────
-            push(topic, PronunciationProgress.processing(attemptId, 25, "Transcribing speech..."));
-            WhisperResult whisperResult = whisperClient.transcribe(audioBytes, filename, contentType);
-            String transcript = whisperResult != null && whisperResult.getText() != null
-                    ? whisperResult.getText().trim() : "";
-
-            push(topic, PronunciationProgress.transcribed(attemptId, transcript));
-            log.info("[Pronunciation] attempt={} transcript='{}'", attemptId, transcript);
-
-            // ── Bước 3: IPA comparison + scoring (Python service) ───────
-            push(topic, PronunciationProgress.processing(attemptId, 65, "Analyzing phonemes..."));
+            // ── Bước 2: wav2vec2 phoneme analysis (Python service) ──────
+            // Bỏ Whisper — gửi audio trực tiếp, Python dùng wav2vec2 phân tích phoneme.
+            // Tránh auto-correct của Whisper (vd "tink"→"think") che giấu lỗi phát âm.
+            push(topic, PronunciationProgress.processing(attemptId, 30, "Analyzing phonemes..."));
             PronunciationSession session = pronunciationService.requireOwned(sessionId, userId);
-            AnalyzeResult result = aiClient.analyze(transcript, session.getTargetText(), session.getTargetIpa());
+            AnalyzeResult result = aiClient.analyze(audioBytes, contentType,
+                    session.getTargetText(), session.getTargetIpa());
+
+            // actual_ipa là "transcript" hiển thị cho user (phoneme detected)
+            String transcript = result.actualIpa() != null ? result.actualIpa() : "";
+            push(topic, PronunciationProgress.transcribed(attemptId, transcript));
+            log.info("[Pronunciation] attempt={} actual_ipa='{}'", attemptId, transcript);
 
             // ── Bước 4: lưu kết quả vào DB ──────────────────────────────
             push(topic, PronunciationProgress.processing(attemptId, 85, "Saving results..."));

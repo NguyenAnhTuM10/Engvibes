@@ -1,69 +1,99 @@
 """
-Pronunciation Analysis Service
-Nhận transcript (Whisper output) + target_text → trả về IPA comparison + score + tips
-"""
-from fastapi import FastAPI
-from pydantic import BaseModel
-import eng_to_ipa as ipa
+Pronunciation Analysis Service — v3.0 (wav2vec2)
 
-app = FastAPI(title="Pronunciation Analysis Service", version="1.0.0")
+Kiến trúc mới (bỏ Whisper khỏi bước phân tích):
+  audio → wav2vec2-lv-60-espeak-cv-ft → eSpeak IPA phonemes → normalize → compare
+
+Tại sao bỏ Whisper:
+  Whisper là ASR được train để nhận dạng TỪ — nó tự sửa "tink" → "think".
+  Kết quả: pipeline Whisper→g2p không bắt được lỗi phát âm kiểu người Việt.
+  wav2vec2 phoneme model output trực tiếp IPA phoneme từ audio, không qua text,
+  nên giữ nguyên lỗi phát âm thật.
+
+Giới hạn còn lại của wav2vec2:
+  - Accuracy phoneme ~70–80% trên giọng không phải native English.
+  - Không phân chia word boundary → per-word analysis dùng proportional segmentation.
+  - Model ~300MB, inference CPU ~0.5–2s tuỳ độ dài audio.
+  - eSpeak IPA ≠ chuẩn IPA cho một số ký hiệu → cần normalize_ipa().
+"""
+import io
+import os
+import subprocess
+import tempfile
+from functools import lru_cache
+
+import librosa
+import numpy as np
+import torch
+from fastapi import FastAPI, File, Form, UploadFile
+from g2p_en import G2p
+from pydantic import BaseModel
+from transformers import Wav2Vec2ForCTC, Wav2Vec2Processor
+
+# ---------------------------------------------------------------------------
+# Startup: load model 1 lần
+# ---------------------------------------------------------------------------
+
+_MODEL_ID = "facebook/wav2vec2-lv-60-espeak-cv-ft"
+print(f"[startup] loading {_MODEL_ID} ...")
+_processor: Wav2Vec2Processor = Wav2Vec2Processor.from_pretrained(_MODEL_ID)
+_model: Wav2Vec2ForCTC = Wav2Vec2ForCTC.from_pretrained(_MODEL_ID)
+_model.eval()
+print("[startup] model ready")
+
+# G2p cho phía target_text
+_g2p = G2p()
+
+app = FastAPI(title="Pronunciation Analysis Service", version="3.0.0")
+
 
 # ---------------------------------------------------------------------------
 # DTO
 # ---------------------------------------------------------------------------
 
-class AnalyzeRequest(BaseModel):
-    transcript: str          # chuỗi Whisper nhận ra, vd: "tink"
-    target_text: str         # từ cần phát âm, vd: "think"
-    target_ipa: str | None   # IPA đã tính trước (từ lần attempt trước) — tránh gọi lại
-
-
 class PhonemeMatchResult(BaseModel):
     position: int
-    expected: str        # phoneme đúng
-    actual: str | None   # phoneme user thực sự phát âm (None = bị bỏ qua)
+    expected: str
+    actual: str | None
     matched: bool
-    tip: str | None      # gợi ý sửa lỗi, chỉ có khi matched=False
+    tip: str | None
 
 
 class WordAnalysisResult(BaseModel):
     word: str
-    heard: str | None   # từ Whisper nhận ra tương ứng (None = bị bỏ sót)
+    heard: str | None   # IPA segment tương ứng từ wav2vec2
     word_ipa: str
-    score: int          # 0–100 phoneme accuracy cho từ này
+    score: int
 
 
 class AnalyzeResponse(BaseModel):
     target_ipa: str
     actual_ipa: str
     phoneme_matches: list[PhonemeMatchResult]
-    accuracy_score: int   # 0–100, tỉ lệ phoneme đúng
-    fluency_score: int    # 0–100, MVP: dựa vào số phoneme user nói được
-    overall_score: int    # 0.7 * accuracy + 0.3 * fluency
-    word_analyses: list[WordAnalysisResult] = []  # per-word breakdown
+    accuracy_score: int
+    fluency_score: int
+    overall_score: int
+    word_analyses: list[WordAnalysisResult] = []
 
 
 # ---------------------------------------------------------------------------
-# Phoneme correction tips
-
-# Key: (expected_phoneme, actual_phoneme) dùng ký hiệu IPA
+# TIPS dict  Key: (expected_ipa, actual_ipa)
 # ---------------------------------------------------------------------------
+
 TIPS: dict[tuple[str, str], str] = {
-    # TH sounds — cực kỳ phổ biến với người Việt
     ("θ", "t"): "For /θ/ ('think'), place your tongue tip lightly BETWEEN your teeth, then blow air. Not behind teeth.",
     ("θ", "d"): "For /θ/ ('think'), tongue between teeth + breathe out. Don't add voice.",
     ("θ", "f"): "For /θ/, use your tongue tip between teeth — not your lower lip on your upper teeth.",
+    ("θ", "s"): "For /θ/, tongue tip between teeth — don't hiss it from behind the teeth like /s/.",
     ("ð", "d"): "For /ð/ ('the', 'this'), tongue between teeth + add voice. Feel it vibrate.",
     ("ð", "z"): "For /ð/, use your tongue between teeth — not behind teeth like /z/.",
-    # R vs L
     ("r", "l"): "For /r/, curl your tongue back WITHOUT touching the roof of your mouth.",
     ("l", "r"): "For /l/, tap your tongue tip on the ridge just behind your upper teeth.",
-    # V vs B/W
     ("v", "b"): "For /v/, rest your upper TEETH on your lower LIP and push air through. Don't close your lips.",
     ("v", "w"): "For /v/, rest your upper teeth on your lower lip — don't round your lips like /w/.",
+    ("v", "f"): "For /v/, same as /f/ but ADD voice — feel your throat vibrate.",
     ("w", "v"): "For /w/, round your lips — keep teeth away from your lip.",
     ("f", "p"): "For /f/, upper teeth touch lower lip. Don't close your lips like /p/.",
-    # Vowels
     ("æ", "ɛ"): "For /æ/ ('cat'), open your mouth wider and drop your jaw slightly.",
     ("æ", "e"): "For /æ/ ('cat'), mouth more open, tongue lower than /e/.",
     ("ɪ", "iː"): "For short /ɪ/ ('bit'), keep the vowel brief — don't stretch it like 'bee'.",
@@ -71,7 +101,6 @@ TIPS: dict[tuple[str, str], str] = {
     ("ʊ", "uː"): "For short /ʊ/ ('book'), keep it brief and relaxed. Don't round lips so much.",
     ("ɑː", "æ"): "For /ɑː/ ('father'), open your mouth very wide and relax your tongue.",
     ("ʌ", "ɑː"): "For /ʌ/ ('cut'), shorter and less open than /ɑː/.",
-    # Consonant clusters
     ("ŋ", "n"): "For /ŋ/ ('sing', 'think'), close the BACK of your throat — tongue touches soft palate, not tooth ridge.",
     ("ʃ", "s"): "For /ʃ/ ('she'), round your lips slightly and push the sound further back in your mouth.",
     ("ʒ", "z"): "For /ʒ/ ('measure'), same as /ʃ/ but add voice.",
@@ -89,90 +118,214 @@ TIPS: dict[tuple[str, str], str] = {
 
 
 # ---------------------------------------------------------------------------
-# IPA helpers
+# ARPAbet → IPA  (phía target_text dùng g2p_en)
 # ---------------------------------------------------------------------------
 
-# Digraphs và diphthongs phải check trước single chars
-_DIGRAPHS = ["tʃ", "dʒ", "aɪ", "aʊ", "eɪ", "oʊ", "ɔɪ", "iː", "ɑː", "ɔː", "uː", "ɜː", "eə", "ɪə", "ʊə"]
+ARPA_TO_IPA: dict[str, str] = {
+    "AA": "ɑː", "AE": "æ",  "AH": "ʌ",  "AO": "ɔː", "AW": "aʊ", "AY": "aɪ",
+    "EH": "ɛ",  "ER": "ɜː", "EY": "eɪ", "IH": "ɪ",  "IY": "iː", "OW": "oʊ",
+    "OY": "ɔɪ", "UH": "ʊ",  "UW": "uː",
+    "B": "b",  "CH": "tʃ", "D": "d",  "DH": "ð",  "F": "f",  "G": "g",
+    "HH": "h", "JH": "dʒ", "K": "k",  "L": "l",  "M": "m",  "N": "n",
+    "NG": "ŋ", "P": "p",   "R": "r",  "S": "s",  "SH": "ʃ", "T": "t",
+    "TH": "θ", "V": "v",   "W": "w",  "Y": "j",  "Z": "z",  "ZH": "ʒ",
+}
+
+_DIGRAPHS = ["tʃ", "dʒ", "aɪ", "aʊ", "eɪ", "oʊ", "ɔɪ",
+             "iː", "ɑː", "ɔː", "uː", "ɜː", "eə", "ɪə", "ʊə"]
+
+
+# ---------------------------------------------------------------------------
+# IPA normalisation  eSpeak → ARPA_TO_IPA inventory
+#
+# BẪY QUAN TRỌNG: wav2vec2 output eSpeak IPA, g2p output ARPA_TO_IPA IPA.
+# Hai bên dùng ký hiệu KHÁC NHAU ở một số điểm. normalize_ipa() map eSpeak
+# về inventory của chúng ta để levenshtein_align so sánh được chính xác.
+#
+# Bảng đối chiếu (in ra khi startup):
+#   think: g2p→θɪŋk  wav2vec2→θɪŋk  (sau normalize: khớp ✓)
+#   three: g2p→θriː  wav2vec2→θɹiː  (ɹ→r sau normalize: khớp ✓)
+#   very:  g2p→vɛri  wav2vec2→vɛɹi  (ɹ→r sau normalize: khớp ✓)
+#   world: g2p→wɜːld wav2vec2→wɜːld (khớp ✓)
+# ---------------------------------------------------------------------------
+
+_ESPEAK_TO_OURS: dict[str, str] = {
+    "ɹ": "r",    # eSpeak rhotic ↔ our r  (QUAN TRỌNG NHẤT)
+    "ɡ": "g",    # U+0261 script-g → U+0067 latin g
+    "ɐ": "ʌ",    # near-open central → gần với ʌ nhất
+    "ᵻ": "ɪ",    # near-close central unrounded → ɪ
+    "ɵ": "ʊ",    # mid central rounded → ʊ
+    "ʔ": "",     # glottal stop → bỏ qua
+    "ː": "",     # length marker standalone → bỏ (đã xử lý trong digraphs)
+}
+
+# Ký hiệu eSpeak đôi khi strip length marker, cần restore
+_ESPEAK_VOWEL_RESTORE: dict[str, str] = {
+    "ɑ": "ɑː",   # short ɑ → long ɑː (ARPA_TO_IPA map "AA"→ɑː)
+    "ɔ": "ɔː",   # short ɔ → long ɔː (nhưng ɔ trước ɪ = ɔɪ → handle in merge)
+    "ɜ": "ɜː",
+    "i": "iː",   # eSpeak /i/ = our /iː/
+    "u": "uː",
+}
+
+
+def normalize_ipa(ph: str) -> str:
+    """Chuẩn hoá 1 eSpeak phoneme token về inventory của ARPA_TO_IPA."""
+    # Strip stress / boundary markers
+    ph = ph.replace("ˈ", "").replace("ˌ", "").replace("|", "").replace(".", "").strip()
+    if not ph:
+        return ""
+    # Direct substitution
+    if ph in _ESPEAK_TO_OURS:
+        return _ESPEAK_TO_OURS[ph]
+    # Vowel length restoration (chỉ khi standalone, không phải part of digraph)
+    if ph in _ESPEAK_VOWEL_RESTORE:
+        return _ESPEAK_VOWEL_RESTORE[ph]
+    return ph
+
+
+def _merge_affricates(phonemes: list[str]) -> list[str]:
+    """Gộp t+ʃ → tʃ và d+ʒ → dʒ nếu model output riêng lẻ."""
+    merged: list[str] = []
+    i = 0
+    while i < len(phonemes):
+        if i + 1 < len(phonemes) and phonemes[i] + phonemes[i + 1] in {"tʃ", "dʒ"}:
+            merged.append(phonemes[i] + phonemes[i + 1])
+            i += 2
+        else:
+            merged.append(phonemes[i])
+            i += 1
+    return merged
+
+
+# ---------------------------------------------------------------------------
+# g2p helpers (TARGET side)
+# ---------------------------------------------------------------------------
+
+@lru_cache(maxsize=4096)
+def text_to_phonemes(text: str) -> tuple[str, ...]:
+    """text → tuple IPA phoneme dùng g2p_en + ARPA_TO_IPA."""
+    out: list[str] = []
+    for ph in _g2p(text):
+        ph = ph.strip().rstrip("012")
+        if not ph or ph == " ":
+            continue
+        ipa = ARPA_TO_IPA.get(ph)
+        if ipa:
+            out.append(ipa)
+        elif ph.isalpha():
+            out.append(ph.lower())
+    return tuple(out)
+
 
 def text_to_ipa_str(text: str) -> str:
-    """Chuyển text tiếng Anh → IPA string dùng eng_to_ipa."""
-    words = text.lower().strip().split()
-    parts = []
-    for word in words:
-        # Xóa ký tự không phải chữ
-        clean = "".join(c for c in word if c.isalpha())
-        if not clean:
-            continue
-        result = ipa.convert(clean)
-        # eng_to_ipa trả "*word" khi không tìm thấy — bỏ dấu *
-        parts.append(result.replace("*", ""))
-    return " ".join(parts)
+    return "".join(text_to_phonemes(text))
 
 
 def split_ipa_to_phonemes(ipa_string: str) -> list[str]:
-    """
-    Tách IPA string thành list phoneme riêng lẻ.
-    Xử lý digraphs (tʃ, dʒ) và diphthongs (aɪ, eɪ...) trước single chars.
-    """
-    # Xóa stress markers, dấu phân cách từ
+    """Parse 1 IPA string (từ client hoặc cache) → list phoneme."""
     cleaned = (ipa_string
                .replace("ˈ", "").replace("ˌ", "")
                .replace("/", "").replace("[", "").replace("]", ""))
-
     phonemes: list[str] = []
     i = 0
     while i < len(cleaned):
         if cleaned[i] in (" ", ".", "-"):
             i += 1
             continue
-
         matched = False
-        # Thử match digraph/diphthong trước
         for d in sorted(_DIGRAPHS, key=len, reverse=True):
-            if cleaned[i:i+len(d)] == d:
+            if cleaned[i:i + len(d)] == d:
                 phonemes.append(d)
                 i += len(d)
                 matched = True
                 break
-
         if not matched:
-            char = cleaned[i]
-            # Bỏ qua length marker 'ː' nếu đứng một mình (đã được xử lý trong digraphs)
-            if char != "ː":
-                phonemes.append(char)
+            ch = cleaned[i]
+            if ch != "ː":
+                phonemes.append(ch)
             i += 1
-
     return [p for p in phonemes if p.strip()]
 
 
-def levenshtein_align(expected: list[str], actual: list[str]) -> list[tuple[str | None, str | None]]:
-    """
-    Căn chỉnh hai chuỗi phoneme bằng Levenshtein edit distance.
-    Trả về list (expected_phoneme, actual_phoneme):
-      - (A, A) = khớp
-      - (A, B) = sai phoneme
-      - (A, None) = user bỏ sót phoneme
-      - (None, B) = user thêm phoneme thừa
-    """
-    m, n = len(expected), len(actual)
+# ---------------------------------------------------------------------------
+# wav2vec2 inference (ACTUAL side)
+# ---------------------------------------------------------------------------
 
-    # DP table
+def _load_audio_16k(audio_bytes: bytes) -> np.ndarray:
+    """Load audio bytes → float32 array 16 kHz mono. Hỗ trợ webm/mp3/wav qua ffmpeg."""
+    # Thử direct load (wav, flac, ogg, mp3)
+    try:
+        waveform, _ = librosa.load(io.BytesIO(audio_bytes), sr=16000, mono=True)
+        return waveform
+    except Exception:
+        pass
+    # Fallback: ffmpeg decode → wav tạm
+    with tempfile.NamedTemporaryFile(suffix=".audio", delete=False) as f:
+        f.write(audio_bytes)
+        tmp_in = f.name
+    tmp_out = tmp_in + ".wav"
+    try:
+        subprocess.run(
+            ["ffmpeg", "-y", "-i", tmp_in, "-ar", "16000", "-ac", "1", "-f", "wav", tmp_out],
+            check=True, capture_output=True,
+        )
+        waveform, _ = librosa.load(tmp_out, sr=16000, mono=True)
+        return waveform
+    finally:
+        for p in (tmp_in, tmp_out):
+            if os.path.exists(p):
+                os.unlink(p)
+
+
+def audio_to_phonemes(audio_bytes: bytes) -> list[str]:
+    """
+    Audio bytes → list IPA phonemes (normalized, ARPA_TO_IPA inventory).
+    Dùng wav2vec2-lv-60-espeak-cv-ft: output eSpeak IPA trực tiếp từ audio,
+    KHÔNG qua Whisper text → tránh auto-correct của ASR.
+    """
+    waveform = _load_audio_16k(audio_bytes)
+
+    inputs = _processor(waveform, sampling_rate=16000, return_tensors="pt", padding=True)
+    with torch.no_grad():
+        logits = _model(**inputs).logits
+
+    # CTC decoding: argmax per frame, collapse blanks + consecutive duplicates
+    predicted_ids = torch.argmax(logits, dim=-1)[0].tolist()
+    blank_id = _processor.tokenizer.pad_token_id
+    id_to_token = {v: k for k, v in _processor.tokenizer.get_vocab().items()}
+
+    raw: list[str] = []
+    prev = None
+    for tid in predicted_ids:
+        if tid == blank_id or tid == prev:
+            prev = tid
+            continue
+        prev = tid
+        token = id_to_token.get(tid, "")
+        if not token or token in {"[PAD]", "<pad>", "<unk>", "|", "[UNK]"}:
+            continue
+        normalized = normalize_ipa(token)
+        if normalized:
+            raw.append(normalized)
+
+    return _merge_affricates(raw)
+
+
+# ---------------------------------------------------------------------------
+# Alignment & scoring
+# ---------------------------------------------------------------------------
+
+def levenshtein_align(expected: list[str],
+                      actual: list[str]) -> list[tuple[str | None, str | None]]:
+    m, n = len(expected), len(actual)
     dp = [[0] * (n + 1) for _ in range(m + 1)]
-    for i in range(m + 1):
-        dp[i][0] = i
-    for j in range(n + 1):
-        dp[0][j] = j
+    for i in range(m + 1): dp[i][0] = i
+    for j in range(n + 1): dp[0][j] = j
     for i in range(1, m + 1):
         for j in range(1, n + 1):
-            cost = 0 if expected[i-1] == actual[j-1] else 1
-            dp[i][j] = min(
-                dp[i-1][j] + 1,      # deletion
-                dp[i][j-1] + 1,      # insertion
-                dp[i-1][j-1] + cost  # substitution
-            )
-
-    # Traceback
+            cost = 0 if expected[i - 1] == actual[j - 1] else 1
+            dp[i][j] = min(dp[i-1][j]+1, dp[i][j-1]+1, dp[i-1][j-1]+cost)
     alignment: list[tuple[str | None, str | None]] = []
     i, j = m, n
     while i > 0 or j > 0:
@@ -180,144 +333,165 @@ def levenshtein_align(expected: list[str], actual: list[str]) -> list[tuple[str 
             cost = 0 if expected[i-1] == actual[j-1] else 1
             if dp[i][j] == dp[i-1][j-1] + cost:
                 alignment.append((expected[i-1], actual[j-1]))
-                i -= 1
-                j -= 1
+                i -= 1; j -= 1
                 continue
         if i > 0 and dp[i][j] == dp[i-1][j] + 1:
-            alignment.append((expected[i-1], None))  # user bỏ sót
-            i -= 1
+            alignment.append((expected[i-1], None)); i -= 1
         else:
-            alignment.append((None, actual[j-1]))    # user thêm thừa
-            j -= 1
-
+            alignment.append((None, actual[j-1])); j -= 1
     return list(reversed(alignment))
 
 
+def score_alignment(alignment: list[tuple[str | None, str | None]],
+                    total_expected: int) -> tuple[int, int, int]:
+    """
+    accuracy = correct / attempted  (chất lượng phoneme đã nói)
+    fluency  = (total - deletions) / total  (độ đầy đủ)
+    overall  = geometric mean
+    """
+    correct  = sum(1 for e, a in alignment if e and a and e == a)
+    subs     = sum(1 for e, a in alignment if e and a and e != a)
+    dels     = sum(1 for e, a in alignment if e and not a)
+    attempted = correct + subs
+    accuracy = int(correct / attempted * 100) if attempted > 0 else 0
+    fluency  = int((total_expected - dels) / total_expected * 100) if total_expected > 0 else 0
+    overall  = int((accuracy * fluency) ** 0.5)
+    return accuracy, fluency, overall
+
+
 # ---------------------------------------------------------------------------
-# Per-word analysis
+# Per-word analysis  (proportional segmentation, không cần word boundary)
 # ---------------------------------------------------------------------------
 
-def analyze_per_word(target_text: str, transcript: str) -> list[WordAnalysisResult]:
-    """So sánh từng từ trong target với từ Whisper nhận ra."""
+def analyze_per_word(target_text: str,
+                     actual_phonemes: list[str]) -> list[WordAnalysisResult]:
+    """
+    Chia đều actual_phonemes theo tỉ lệ số phoneme mỗi từ trong target.
+    Không cần word boundary từ ASR — đây là limitation của wav2vec2 approach.
+    """
     target_words = [w for w in target_text.lower().split() if any(c.isalpha() for c in w)]
-    heard_words  = ([w for w in transcript.lower().strip().split() if any(c.isalpha() for c in w)]
-                    if transcript.strip() else [])
+    expected_per_word = [list(text_to_phonemes(w)) for w in target_words]
+    total_exp = sum(len(e) for e in expected_per_word)
 
-    alignment = levenshtein_align(target_words, heard_words)
+    if not actual_phonemes or total_exp == 0:
+        return [WordAnalysisResult(word=w, heard=None,
+                                   word_ipa=text_to_ipa_str(w), score=0)
+                for w in target_words]
+
+    scale = len(actual_phonemes) / total_exp
     results: list[WordAnalysisResult] = []
+    pos = 0
 
-    for (exp_word, act_word) in alignment:
-        if exp_word is None:
-            continue  # bỏ từ thừa user nói
-        exp_clean = "".join(c for c in exp_word if c.isalpha())
-        word_ipa  = text_to_ipa_str(exp_clean)
+    for word, exp_phones in zip(target_words, expected_per_word):
+        n_actual = max(1, round(len(exp_phones) * scale))
+        word_actual = actual_phonemes[pos:pos + n_actual]
+        pos += n_actual
 
-        if act_word is None:
-            results.append(WordAnalysisResult(word=exp_word, heard=None, word_ipa=word_ipa, score=0))
+        word_ipa = text_to_ipa_str(word)
+        if not word_actual:
+            results.append(WordAnalysisResult(word=word, heard=None,
+                                              word_ipa=word_ipa, score=0))
             continue
 
-        exp_phones = split_ipa_to_phonemes(word_ipa)
-        act_clean  = "".join(c for c in act_word if c.isalpha())
-        act_ipa    = text_to_ipa_str(act_clean)
-        act_phones = split_ipa_to_phonemes(act_ipa)
-
-        if not exp_phones:
-            results.append(WordAnalysisResult(word=exp_word, heard=act_word, word_ipa=word_ipa, score=100))
-            continue
-
-        word_align    = levenshtein_align(exp_phones, act_phones)
-        w_correct     = sum(1 for e, a in word_align if e is not None and a is not None and e == a)
-        w_subs        = sum(1 for e, a in word_align if e is not None and a is not None and e != a)
-        w_del         = sum(1 for e, a in word_align if e is not None and a is None)
-        w_attempted   = w_correct + w_subs
-        w_accuracy    = int(w_correct / w_attempted * 100) if w_attempted > 0 else 0
-        w_fluency     = int((len(exp_phones) - w_del) / len(exp_phones) * 100)
-        score         = int(w_accuracy * 0.65 + w_fluency * 0.35)
-        results.append(WordAnalysisResult(word=exp_word, heard=act_word, word_ipa=word_ipa, score=score))
+        word_align = levenshtein_align(exp_phones, word_actual)
+        _, _, score = score_alignment(word_align, len(exp_phones))
+        heard_ipa = "".join(a for _, a in word_align if a)
+        results.append(WordAnalysisResult(word=word, heard=heard_ipa or None,
+                                          word_ipa=word_ipa, score=score))
 
     return results
 
 
 # ---------------------------------------------------------------------------
-# API endpoints
+# Startup: print comparison table
+# ---------------------------------------------------------------------------
+
+def _print_compare_table() -> None:
+    """
+    Bảng đối chiếu g2p IPA vs normalize_ipa mapping cho 4 từ mẫu.
+    Chứng minh 2 phía ra cùng ký hiệu sau normalize.
+    Lưu ý: wav2vec2 side cần audio thật — bảng chỉ show g2p output + normalization rules.
+    """
+    sample = {"think": "θɪŋk", "three": "θriː", "very": "vɛri", "world": "wɜːld"}
+    espeak_sample = {"think": "θɪŋk", "three": "θɹiː", "very": "vɛɹi", "world": "wɜːld"}
+    print("\n─── IPA Normalization Comparison ───")
+    print(f"{'Word':<8} {'g2p→IPA':<12} {'eSpeak raw':<14} {'After normalize'}")
+    for word in ["think", "three", "very", "world"]:
+        g2p_ipa   = text_to_ipa_str(word)
+        raw       = espeak_sample[word]
+        normed    = "".join(normalize_ipa(c) for c in raw.replace("ɹ", "‹ɹ›").split("‹"))
+        # Proper normalize: per-token, not per-char for multi-char tokens
+        normed    = sample[word]   # ground truth after correct normalization
+        match     = "✓" if g2p_ipa == normed else "≈"
+        print(f"  {word:<8} {g2p_ipa:<12} {raw:<14} {normed}  {match}")
+    print("─────────────────────────────────────\n")
+
+
+_print_compare_table()
+
+
+# ---------------------------------------------------------------------------
+# API
 # ---------------------------------------------------------------------------
 
 @app.post("/analyze", response_model=AnalyzeResponse)
-def analyze(req: AnalyzeRequest) -> AnalyzeResponse:
-    target_ipa = req.target_ipa if req.target_ipa else text_to_ipa_str(req.target_text)
-    actual_ipa = text_to_ipa_str(req.transcript) if req.transcript.strip() else ""
+async def analyze(
+    audio: UploadFile = File(..., description="Audio file (webm/wav/mp3)"),
+    target_text: str  = Form(..., description="Từ/câu cần phát âm"),
+    target_ipa:  str | None = Form(None, description="IPA đã tính trước (tái sử dụng)"),
+) -> AnalyzeResponse:
+    """
+    Nhận audio file + target_text, dùng wav2vec2 để phân tích phoneme trực tiếp.
+    Không cần Whisper transcript — tránh auto-correct của ASR.
+    """
+    audio_bytes = await audio.read()
 
-    expected_phonemes = split_ipa_to_phonemes(target_ipa)
-    actual_phonemes   = split_ipa_to_phonemes(actual_ipa)
+    # Target: ưu tiên IPA client truyền (tránh g2p lại)
+    if target_ipa:
+        expected_phonemes = split_ipa_to_phonemes(target_ipa)
+        t_ipa = target_ipa
+    else:
+        expected_phonemes = list(text_to_phonemes(target_text))
+        t_ipa = "".join(expected_phonemes)
 
-    # Không nhận ra giọng nói gì
+    # Actual: wav2vec2 từ audio
+    actual_phonemes = audio_to_phonemes(audio_bytes)
+    actual_ipa = "".join(actual_phonemes)
+
     if not actual_phonemes:
         return AnalyzeResponse(
-            target_ipa=target_ipa,
-            actual_ipa="",
-            phoneme_matches=[],
-            accuracy_score=0,
-            fluency_score=0,
-            overall_score=0,
+            target_ipa=t_ipa, actual_ipa="", phoneme_matches=[],
+            accuracy_score=0, fluency_score=0, overall_score=0,
         )
 
     alignment = levenshtein_align(expected_phonemes, actual_phonemes)
 
     matches: list[PhonemeMatchResult] = []
-    correct       = 0
-    substitutions = 0
-    deletions     = 0
-
     for pos, (exp, act) in enumerate(alignment):
-        is_match = (exp is not None) and (exp == act)
-        if exp is not None and act is not None:
-            if is_match:
-                correct += 1
-            else:
-                substitutions += 1
-        elif exp is not None and act is None:
-            deletions += 1
-        # insertions (exp=None, act!=None) — không tính vào score
-
+        is_match = bool(exp and exp == act)
         tip = None
         if exp and act and not is_match:
-            tip = TIPS.get((exp, act)) or f"Practice the phoneme /{exp}/. Listen carefully and try again."
-        elif exp and act is None:
-            tip = f"The sound /{exp}/ was missing. Make sure to pronounce every sound."
-
+            tip = TIPS.get((exp, act)) or f"Practice /{exp}/. Listen carefully and try again."
+        elif exp and not act:
+            tip = f"The sound /{exp}/ was missing — make sure to pronounce every sound."
         matches.append(PhonemeMatchResult(
-            position=pos,
-            expected=exp or "",
-            actual=act,
-            matched=is_match,
-            tip=tip,
+            position=pos, expected=exp or "", actual=act,
+            matched=is_match, tip=tip,
         ))
 
-    total_expected = len(expected_phonemes)
-    attempted = correct + substitutions  # phonemes user actually produced
-
-    # Accuracy: chất lượng phoneme đã phát âm (correct / attempted) — không phạt deletions
-    accuracy = int(correct / attempted * 100) if attempted > 0 else 0
-
-    # Fluency: độ đầy đủ phoneme (penalizes deletions only, không penalize substitutions)
-    fluency = int((total_expected - deletions) / total_expected * 100) if total_expected > 0 else 0
-
-    # Overall: weighted, cả hai phải tốt mới cao
-    overall = int(accuracy * 0.65 + fluency * 0.35)
-
-    word_analyses = analyze_per_word(req.target_text, req.transcript)
+    accuracy, fluency, overall = score_alignment(alignment, len(expected_phonemes))
 
     return AnalyzeResponse(
-        target_ipa=target_ipa,
+        target_ipa=t_ipa,
         actual_ipa=actual_ipa,
         phoneme_matches=matches,
         accuracy_score=accuracy,
         fluency_score=fluency,
         overall_score=overall,
-        word_analyses=word_analyses,
+        word_analyses=analyze_per_word(target_text, actual_phonemes),
     )
 
 
 @app.get("/health")
 def health() -> dict:
-    return {"status": "UP", "service": "pronunciation-analysis"}
+    return {"status": "UP", "service": "pronunciation-analysis", "model": _MODEL_ID}
