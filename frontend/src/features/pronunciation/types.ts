@@ -1,3 +1,19 @@
+// Nội dung tĩnh phục vụ từ backend (data/pronunciation_content.json)
+export interface PronunciationWord {
+  text: string
+  targetSound: string        // âm trọng tâm IPA, vd "θ"
+  ipa: string                // IPA đầy đủ của từ, vd "θɪŋk"
+  exampleSentence: string
+  group: string              // nhóm âm, vd "Final Consonants"
+}
+
+export interface PronunciationSentence {
+  text: string
+  level: 'B1' | 'B2' | 'C1'
+  targetSound: string | null // âm trọng tâm của drill, null nếu không nhắm 1 âm
+  category: string
+}
+
 export interface WordAnalysis {
   word: string
   heard: string | null

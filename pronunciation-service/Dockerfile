@@ -27,7 +27,7 @@ Wav2Vec2Processor.from_pretrained('facebook/wav2vec2-lv-60-espeak-cv-ft'); \
 Wav2Vec2ForCTC.from_pretrained('facebook/wav2vec2-lv-60-espeak-cv-ft'); \
 print('Model pre-downloaded OK')"
 
-COPY main.py .
+COPY phonemes.py main.py .
 
 EXPOSE 8000
 

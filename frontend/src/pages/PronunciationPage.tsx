@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import AudioRecorder from '@/shared/components/AudioRecorder'
 import { PhonemeDisplay } from '@/features/pronunciation/components/PhonemeDisplay'
@@ -6,63 +6,37 @@ import { WordLevelDisplay } from '@/features/pronunciation/components/WordLevelD
 import { ScorePanel } from '@/features/pronunciation/components/ScorePanel'
 import { FeedbackPanel } from '@/features/pronunciation/components/FeedbackPanel'
 import { usePronunciationWs } from '@/features/pronunciation/hooks/usePronunciationWs'
-import { useCreateSession, useSubmitAttempt, useAttempts } from '@/features/pronunciation/api'
+import {
+  useCreateSession,
+  useSubmitAttempt,
+  useAttempts,
+  useWords,
+  useSentences,
+} from '@/features/pronunciation/api'
+import type {
+  PronunciationSentence,
+  PronunciationWord,
+} from '@/features/pronunciation/types'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { RotateCcw, Trophy, Volume2, BookOpen, Type } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-// ── Vocabulary ──────────────────────────────────────────────────────────────
-
-const WORD_GROUPS: Record<string, string[]> = {
-  'TH Sounds':  ['think', 'through', 'three', 'this', 'the', 'there', 'weather', 'brother'],
-  'R / L':      ['right', 'light', 'river', 'liver', 'world', 'really', 'clearly'],
-  'V / W':      ['very', 'well', 'valley', 'village', 'voice', 'wine'],
-  'Vowels':     ['bit', 'beat', 'cat', 'cut', 'caught', 'coat', 'book', 'boot'],
-  'Clusters':   ['strength', 'months', 'twelfth', 'shoulder', 'children', 'clothes'],
-}
-
-interface SentenceItem {
-  text: string
-  level: 'B1' | 'B2' | 'C1'
-}
-
-const SENTENCE_GROUPS: Record<string, SentenceItem[]> = {
-  'Daily Life': [
-    { text: 'Could you tell me how to get to the nearest station?', level: 'B1' },
-    { text: 'I would like to make a reservation for two people.', level: 'B1' },
-    { text: 'The weather has been quite unpredictable lately.', level: 'B1' },
-    { text: 'Would you mind turning down the volume a little?', level: 'B1' },
-    { text: 'I am really looking forward to the weekend.', level: 'B1' },
-  ],
-  'Business': [
-    { text: 'Could you please elaborate on that point?', level: 'B2' },
-    { text: 'We need to finalize the quarterly report by Thursday.', level: 'B2' },
-    { text: 'I would like to schedule a meeting with your team.', level: 'B2' },
-    { text: 'The presentation was thoroughly prepared and well-structured.', level: 'C1' },
-    { text: 'We sincerely appreciate your contribution to this project.', level: 'B2' },
-  ],
-  'IELTS / Academic': [
-    { text: 'There are several factors that contribute to this phenomenon.', level: 'C1' },
-    { text: 'The evidence strongly suggests that this trend will continue.', level: 'C1' },
-    { text: 'The advantages of this approach outweigh the disadvantages.', level: 'B2' },
-    { text: 'This issue has been widely debated among researchers worldwide.', level: 'C1' },
-    { text: 'It is worth noting that the results vary significantly.', level: 'B2' },
-  ],
-  'TH Drills': [
-    { text: 'This is the third time I have thought about this theory.', level: 'B1' },
-    { text: 'The weather there seemed rather threatening and thick with clouds.', level: 'B2' },
-    { text: 'Both of them breathed through their teeth without thinking.', level: 'B2' },
-    { text: 'The author thought thoroughly about the theme of the thesis.', level: 'C1' },
-    { text: 'Three thousand people gathered on the path beneath the bridge.', level: 'B2' },
-  ],
-}
-
 const LEVEL_COLOR: Record<string, string> = {
   B1: 'bg-blue-100 text-blue-700 border-blue-200',
   B2: 'bg-purple-100 text-purple-700 border-purple-200',
   C1: 'bg-orange-100 text-orange-700 border-orange-200',
+}
+
+// Gom mảng theo key, giữ nguyên thứ tự xuất hiện đầu tiên của mỗi nhóm.
+function groupBy<T>(items: T[], key: (item: T) => string): Record<string, T[]> {
+  const out: Record<string, T[]> = {}
+  for (const item of items) {
+    const k = key(item)
+    ;(out[k] ??= []).push(item)
+  }
+  return out
 }
 
 // ── Component ───────────────────────────────────────────────────────────────
@@ -72,20 +46,44 @@ type Mode = 'word' | 'sentence'
 export default function PronunciationPage() {
   const qc = useQueryClient()
 
-  const [mode,          setMode]          = useState<Mode>('word')
-  const [sessionId,     setSessionId]     = useState<string | null>(null)
-  const [activeWord,    setActiveWord]    = useState<string | null>(null)
+  const { data: words } = useWords()
+  const { data: sentences } = useSentences()
+
+  const wordGroups = useMemo(
+    () => groupBy(words ?? [], (w) => w.group),
+    [words],
+  )
+  const sentenceGroups = useMemo(
+    () => groupBy(sentences ?? [], (s) => s.category),
+    [sentences],
+  )
+  const wordGroupNames = Object.keys(wordGroups)
+  const sentGroupNames = Object.keys(sentenceGroups)
+
+  const [mode,           setMode]           = useState<Mode>('word')
+  const [sessionId,      setSessionId]      = useState<string | null>(null)
+  const [activeWord,     setActiveWord]     = useState<string | null>(null)
   const [activeSentence, setActiveSentence] = useState<string | null>(null)
-  const [activeGroup,   setActiveGroup]   = useState<string>('TH Sounds')
-  const [activeSentGrp, setActiveSentGrp] = useState<string>('Daily Life')
+  const [activeGroup,    setActiveGroup]    = useState<string | null>(null)
+  const [activeSentGrp,  setActiveSentGrp]  = useState<string | null>(null)
 
   const createSession  = useCreateSession()
   const submitAttempt  = useSubmitAttempt(sessionId ?? '')
   const { data: attempts } = useAttempts(sessionId)
   const { status, progress, message, result, resetResult } = usePronunciationWs(sessionId)
 
+  // Nhóm đang chọn — fallback về nhóm đầu tiên khi nội dung vừa load xong
+  const currentGroup = activeGroup ?? wordGroupNames[0] ?? ''
+  const currentSentGrp = activeSentGrp ?? sentGroupNames[0] ?? ''
+
   const activeText = mode === 'word' ? activeWord : activeSentence
   const isProcessing = status === 'processing' || status === 'transcribed'
+
+  // Metadata của từ/câu đang chọn (IPA, câu ví dụ, target sound)
+  const activeWordEntry: PronunciationWord | undefined =
+    wordGroups[currentGroup]?.find((w) => w.text === activeWord)
+  const activeSentEntry: PronunciationSentence | undefined =
+    (sentences ?? []).find((s) => s.text === activeSentence)
 
   // ── Handlers ───────────────────────────────────────────────────────────
 
@@ -115,8 +113,6 @@ export default function PronunciationPage() {
     setActiveWord(null)
     setActiveSentence(null)
     resetResult()
-    if (m === 'word') setActiveGroup('TH Sounds')
-    else setActiveSentGrp('Daily Life')
   }
 
   const bestScore = attempts?.length
@@ -167,13 +163,13 @@ export default function PronunciationPage() {
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium">Choose a word</CardTitle>
             <div className="flex flex-wrap gap-1.5 mt-2">
-              {Object.keys(WORD_GROUPS).map((g) => (
+              {wordGroupNames.map((g) => (
                 <button
                   key={g}
                   onClick={() => setActiveGroup(g)}
                   className={cn(
                     'px-3 py-1 rounded-full text-xs font-medium border transition-colors',
-                    activeGroup === g
+                    currentGroup === g
                       ? 'bg-primary text-primary-foreground border-primary'
                       : 'border-muted hover:border-primary/50 text-muted-foreground',
                   )}
@@ -185,19 +181,28 @@ export default function PronunciationPage() {
           </CardHeader>
           <CardContent>
             <div className="flex flex-wrap gap-2">
-              {WORD_GROUPS[activeGroup].map((word) => (
+              {(wordGroups[currentGroup] ?? []).map((w) => (
                 <button
-                  key={word}
-                  onClick={() => handleSelect(word, 'WORD')}
+                  key={w.text}
+                  onClick={() => handleSelect(w.text, 'WORD')}
                   disabled={createSession.isPending}
+                  title={w.exampleSentence}
                   className={cn(
-                    'px-4 py-2 rounded-lg border text-sm font-medium transition-all',
-                    activeWord === word
+                    'flex flex-col items-center px-4 py-2 rounded-lg border text-sm font-medium transition-all',
+                    activeWord === w.text
                       ? 'bg-primary text-primary-foreground border-primary shadow-sm'
                       : 'border-muted hover:border-primary/50 hover:bg-accent',
                   )}
                 >
-                  {word}
+                  <span>{w.text}</span>
+                  <span
+                    className={cn(
+                      'text-[11px] font-mono mt-0.5',
+                      activeWord === w.text ? 'text-primary-foreground/80' : 'text-muted-foreground',
+                    )}
+                  >
+                    /{w.ipa}/
+                  </span>
                 </button>
               ))}
             </div>
@@ -211,13 +216,13 @@ export default function PronunciationPage() {
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium">Choose a sentence</CardTitle>
             <div className="flex flex-wrap gap-1.5 mt-2">
-              {Object.keys(SENTENCE_GROUPS).map((g) => (
+              {sentGroupNames.map((g) => (
                 <button
                   key={g}
                   onClick={() => setActiveSentGrp(g)}
                   className={cn(
                     'px-3 py-1 rounded-full text-xs font-medium border transition-colors',
-                    activeSentGrp === g
+                    currentSentGrp === g
                       ? 'bg-primary text-primary-foreground border-primary'
                       : 'border-muted hover:border-primary/50 text-muted-foreground',
                   )}
@@ -228,7 +233,7 @@ export default function PronunciationPage() {
             </div>
           </CardHeader>
           <CardContent className="space-y-2">
-            {SENTENCE_GROUPS[activeSentGrp].map(({ text, level }) => (
+            {(sentenceGroups[currentSentGrp] ?? []).map(({ text, level, targetSound }) => (
               <button
                 key={text}
                 onClick={() => handleSelect(text, 'SENTENCE')}
@@ -242,12 +247,19 @@ export default function PronunciationPage() {
               >
                 <div className="flex items-start justify-between gap-3">
                   <span className="leading-relaxed">{text}</span>
-                  <Badge
-                    variant="outline"
-                    className={cn('shrink-0 text-[10px] border', LEVEL_COLOR[level])}
-                  >
-                    {level}
-                  </Badge>
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    {targetSound && (
+                      <Badge variant="outline" className="text-[10px] font-mono">
+                        /{targetSound}/
+                      </Badge>
+                    )}
+                    <Badge
+                      variant="outline"
+                      className={cn('text-[10px] border', LEVEL_COLOR[level])}
+                    >
+                      {level}
+                    </Badge>
+                  </div>
                 </div>
               </button>
             ))}
@@ -294,10 +306,10 @@ export default function PronunciationPage() {
                   </div>
                 )}
 
-                {/* Phoneme / Word display */}
+                {/* Phoneme / Word display — preview dùng IPA tĩnh có sẵn */}
                 {mode === 'word' ? (
                   <PhonemeDisplay
-                    targetIpa={result?.targetIpa ?? null}
+                    targetIpa={result?.targetIpa ?? activeWordEntry?.ipa ?? null}
                     phonemeMatches={result?.phonemeMatches}
                     mode={result ? 'result' : 'preview'}
                   />
@@ -307,6 +319,27 @@ export default function PronunciationPage() {
                     wordAnalyses={result?.wordAnalyses ?? null}
                     mode={result ? 'result' : 'preview'}
                   />
+                )}
+
+                {/* Câu ví dụ / âm trọng tâm cho từ */}
+                {mode === 'word' && activeWordEntry && (
+                  <div className="space-y-1 pt-1">
+                    <p className="text-sm text-muted-foreground">
+                      Focus sound:{' '}
+                      <span className="font-mono text-foreground">/{activeWordEntry.targetSound}/</span>
+                    </p>
+                    <p className="text-sm italic text-muted-foreground">
+                      "{activeWordEntry.exampleSentence}"
+                    </p>
+                  </div>
+                )}
+
+                {/* Âm trọng tâm cho câu drill */}
+                {mode === 'sentence' && activeSentEntry?.targetSound && (
+                  <p className="text-sm text-muted-foreground pt-1">
+                    Focus sound:{' '}
+                    <span className="font-mono text-foreground">/{activeSentEntry.targetSound}/</span>
+                  </p>
                 )}
               </div>
 

@@ -3,6 +3,8 @@ package com.englishapp.pronunciation;
 import com.englishapp.common.ApiResponse;
 import com.englishapp.pronunciation.dto.AttemptResponse;
 import com.englishapp.pronunciation.dto.CreateSessionRequest;
+import com.englishapp.pronunciation.dto.PronunciationSentence;
+import com.englishapp.pronunciation.dto.PronunciationWord;
 import com.englishapp.pronunciation.dto.SessionResponse;
 import com.englishapp.user.UserService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -26,7 +28,20 @@ public class PronunciationController {
 
     private final PronunciationService service;
     private final PronunciationPipeline pipeline;
+    private final PronunciationContentService contentService;
     private final UserService userService;
+
+    @Operation(summary = "List practice words — optionally filtered by phoneme group")
+    @GetMapping("/words")
+    public ApiResponse<List<PronunciationWord>> getWords(@RequestParam(required = false) String group) {
+        return ApiResponse.ok(contentService.getWords(group));
+    }
+
+    @Operation(summary = "List practice sentences — optionally filtered by category")
+    @GetMapping("/sentences")
+    public ApiResponse<List<PronunciationSentence>> getSentences(@RequestParam(required = false) String category) {
+        return ApiResponse.ok(contentService.getSentences(category));
+    }
 
     @Operation(summary = "Create pronunciation session for a word or sentence")
     @PostMapping("/sessions")

@@ -1,6 +1,29 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import api from '@/shared/api/client'
-import type { AttemptResult, PronunciationSession } from './types'
+import type {
+  AttemptResult,
+  PronunciationSentence,
+  PronunciationSession,
+  PronunciationWord,
+} from './types'
+
+// Nội dung tĩnh: danh sách từ luyện phát âm (kèm IPA + câu ví dụ)
+export function useWords() {
+  return useQuery({
+    queryKey: ['pronunciation-words'],
+    queryFn: () => api.get<PronunciationWord[]>('/api/pronunciation/words').then(r => r.data),
+    staleTime: Infinity,   // nội dung tĩnh — không đổi trong phiên
+  })
+}
+
+// Nội dung tĩnh: danh sách câu luyện phát âm
+export function useSentences() {
+  return useQuery({
+    queryKey: ['pronunciation-sentences'],
+    queryFn: () => api.get<PronunciationSentence[]>('/api/pronunciation/sentences').then(r => r.data),
+    staleTime: Infinity,
+  })
+}
 
 // Tạo session mới cho một từ/câu
 export function useCreateSession() {
