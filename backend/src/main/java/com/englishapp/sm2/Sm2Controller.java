@@ -4,8 +4,11 @@ import com.englishapp.common.ApiResponse;
 import com.englishapp.sm2.dto.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.UUID;
 
@@ -14,7 +17,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class Sm2Controller {
 
-    private final Sm2Service service;
+    private final Sm2Service    service;
+    private final ImportService importService;
 
     // ── Decks ───────────────────────────────────────────────────────────────
 
@@ -40,6 +44,45 @@ public class Sm2Controller {
     @ResponseStatus(HttpStatus.CREATED)
     public ApiResponse<Sm2Card> createCard(@RequestBody CardRequest req) {
         return ApiResponse.ok(service.createCard(req));
+    }
+
+    // ── Import ───────────────────────────────────────────────────────────────
+
+    /**
+     * POST /api/sm2/decks/{id}/import/text
+     * Body: { "content": "...", "termSep": "\t", "cardSep": "\n" }
+     * termSep/cardSep hỗ trợ escape: "\\t" = TAB, "\\n" = newline.
+     */
+    @PostMapping("/decks/{id}/import/text")
+    public ApiResponse<ImportSummary> importText(
+            @PathVariable UUID id,
+            @RequestBody ImportTextRequest req) {
+        return ApiResponse.ok(importService.importText(
+                id, req.content(), req.termSep(), req.cardSep()));
+    }
+
+    /**
+     * POST /api/sm2/decks/{id}/import/csv  (multipart)
+     * Header tự động bỏ qua nếu dòng đầu là "front,back[,ipa[,example]]".
+     */
+    @PostMapping(value = "/decks/{id}/import/csv",
+                 consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ApiResponse<ImportSummary> importCsv(
+            @PathVariable UUID id,
+            @RequestParam("file") MultipartFile file) throws IOException {
+        return ApiResponse.ok(importService.importCsv(id, file.getInputStream()));
+    }
+
+    /**
+     * POST /api/sm2/decks/{id}/import/json  (multipart)
+     * Body: JSON array — [{front, back, ipa?, exampleSentence?}].
+     */
+    @PostMapping(value = "/decks/{id}/import/json",
+                 consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ApiResponse<ImportSummary> importJson(
+            @PathVariable UUID id,
+            @RequestParam("file") MultipartFile file) throws IOException {
+        return ApiResponse.ok(importService.importJson(id, file.getInputStream()));
     }
 
     // ── Review queue ─────────────────────────────────────────────────────────
