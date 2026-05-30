@@ -75,4 +75,11 @@ public class PronunciationContentService {
     public List<String> getSentenceCategories() {
         return sentences.stream().map(PronunciationSentence::category).distinct().toList();
     }
+
+    /** Tra 1 từ trong content (case-insensitive) — dùng để làm giàu card SRS (ipa + ví dụ). */
+    public java.util.Optional<PronunciationWord> findWord(String text) {
+        if (text == null) return java.util.Optional.empty();
+        String t = text.trim();
+        return words.stream().filter(w -> w.text().equalsIgnoreCase(t)).findFirst();
+    }
 }

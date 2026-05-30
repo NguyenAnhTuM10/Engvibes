@@ -29,6 +29,17 @@ export interface PhonemeMatch {
   tip: string | null        // gợi ý sửa lỗi
 }
 
+// Thay đổi trên deck SRS "Sounds to practice" sau 1 lần phát âm
+export interface SoundCardChange {
+  cardId: string
+  word: string
+  action: 'ADDED' | 'DEMOTED' | 'PROMOTED'
+  ipa: string | null
+  score: number
+  intervalDays: number | null
+  dueDate: string | null
+}
+
 export interface AttemptResult {
   attemptId: string
   attemptNumber: number
@@ -40,6 +51,7 @@ export interface AttemptResult {
   fluencyScore: number
   phonemeMatches: PhonemeMatch[]
   wordAnalyses: WordAnalysis[] | null
+  soundCardChanges: SoundCardChange[] | null  // tự đẩy từ yếu vào SRS
   createdAt: string
 }
 

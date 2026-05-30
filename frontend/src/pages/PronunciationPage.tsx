@@ -406,6 +406,19 @@ export default function PronunciationPage() {
                 accuracy={result.accuracyScore}
                 fluency={result.fluencyScore}
               />
+              {/* Vòng nối SRS: báo từ vừa được thêm/cập nhật vào "Sounds to practice" */}
+              {(result.soundCardChanges?.length ?? 0) > 0 && (
+                <div className="rounded-lg border border-primary/30 bg-primary/5 px-4 py-3 text-sm space-y-1">
+                  {result.soundCardChanges!.map((c) => (
+                    <p key={c.cardId} className="flex items-center gap-1.5">
+                      <BookOpen className="h-3.5 w-3.5 text-primary shrink-0" />
+                      {c.action === 'ADDED' && <>Đã thêm <b>"{c.word}"</b> vào danh sách ôn “Sounds to practice”.</>}
+                      {c.action === 'DEMOTED' && <>Vẫn cần luyện <b>"{c.word}"</b> — đã đẩy lên đầu hàng đợi ôn.</>}
+                      {c.action === 'PROMOTED' && <>Phát âm tốt <b>"{c.word}"</b>! Giãn lịch ôn{c.intervalDays ? ` (+${c.intervalDays} ngày)` : ''}.</>}
+                    </p>
+                  ))}
+                </div>
+              )}
               <FeedbackPanel
                 phonemeMatches={result.phonemeMatches}
                 transcript={result.transcript}
