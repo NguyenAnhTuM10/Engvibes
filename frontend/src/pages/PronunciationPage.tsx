@@ -27,8 +27,6 @@ export default function PronunciationPage() {
   const [sessionId,    setSessionId]    = useState<string | null>(null)
   const [activeWord,   setActiveWord]   = useState<string | null>(null)
   const [activeGroup,  setActiveGroup]  = useState<string>('TH sounds')
-  const [hasSubmitted, setHasSubmitted] = useState(false)
-
   const createSession = useCreateSession()
   const { data: attempts } = useAttempts(sessionId)
 
@@ -45,7 +43,6 @@ export default function PronunciationPage() {
     setActiveWord(word)
     setSessionId(null)
     resetResult()
-    setHasSubmitted(false)
 
     const session = await createSession.mutateAsync({ targetText: word, sessionType: 'WORD' })
     setSessionId(session.id)
@@ -54,7 +51,6 @@ export default function PronunciationPage() {
   // ── Submit audio ──────────────────────────────────────────────────────
   const handleSubmit = async (blob: Blob) => {
     if (!sessionId) return
-    setHasSubmitted(true)
     resetResult()
     await submitAttempt.mutateAsync(blob)
     // Sau khi COMPLETED: invalidate attempts list để history cập nhật
@@ -65,7 +61,6 @@ export default function PronunciationPage() {
   // ── Try again ─────────────────────────────────────────────────────────
   const handleRetry = () => {
     resetResult()
-    setHasSubmitted(false)
   }
 
   const isProcessing = status === 'processing' || status === 'transcribed'
