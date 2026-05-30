@@ -27,6 +27,7 @@ import java.util.UUID;
 public class ConversationController {
 
     private final ConversationService conversationService;
+    private final ConversationRealtimeService realtimeService;
     private final LlmClient llmClient;
     private final UserService userService;
     private final ObjectMapper objectMapper;
@@ -52,11 +53,30 @@ public class ConversationController {
                 scenario.openingLine));
     }
 
+    /**
+     * T2.2 — Chấm review dựa trên transcript SERVER-OBSERVED, không nhận từ client.
+     * Yêu cầu sessionId; load transcript từ DB (authoritative), chấm, rồi lưu vào session.
+     */
     @PostMapping("/realtime-review")
     public ApiResponse<ConversationReviewResponse> realtimeReview(
             @RequestBody ConversationReviewRequest req) {
+        if (req.sessionId() == null) {
+            throw ApiException.badRequest("sessionId is required for review");
+        }
+        UUID userId = currentUserId();
+        ConversationSession session;
         try {
-            String prompt = buildReviewPrompt(req);
+            session = realtimeService.getOwnedSession(req.sessionId(), userId);
+        } catch (Exception e) {
+            throw ApiException.badRequest("Invalid session: " + e.getMessage());
+        }
+
+        try {
+            // Transcript CHÍNH THỨC từ server-observed turns — client KHÔNG can thiệp
+            List<String> userLines = realtimeService.loadUserTranscripts(req.sessionId());
+            ConversationScenario scenario = parseScenario(session.getScenarioId());
+
+            String prompt = buildReviewPrompt(scenario, userLines, req.durationSec());
             String raw = llmClient.chatCompletion(REVIEW_SYSTEM_PROMPT, prompt);
             ReviewJson parsed = objectMapper.readValue(extractJson(raw), ReviewJson.class);
 
@@ -66,7 +86,7 @@ public class ConversationController {
                         .toList()
                     : List.of();
 
-            return ApiResponse.ok(ConversationReviewResponse.builder()
+            ConversationReviewResponse response = ConversationReviewResponse.builder()
                     .fluency(parsed.fluency())
                     .grammar(parsed.grammar())
                     .vocabulary(parsed.vocabulary())
@@ -75,7 +95,16 @@ public class ConversationController {
                     .improvements(parsed.improvements())
                     .encouragement(parsed.encouragement())
                     .grammarNotes(notes)
-                    .build());
+                    .build();
+
+            // T2.2 — lưu review vào session để user xem lại sau
+            try {
+                realtimeService.saveReview(req.sessionId(), objectMapper.writeValueAsString(response));
+            } catch (Exception e) {
+                log.warn("Failed to persist review for session {}: {}", req.sessionId(), e.getMessage());
+            }
+
+            return ApiResponse.ok(response);
         } catch (Exception e) {
             log.error("Conversation review failed: {}", e.getMessage());
             throw ApiException.badRequest("Failed to review conversation: " + e.getMessage());
@@ -84,11 +113,10 @@ public class ConversationController {
 
     // ── Internal helpers ───────────────────────────────────────────────────────
 
-private String buildReviewPrompt(ConversationReviewRequest req) {
-        ConversationScenario scenario = parseScenario(req.scenarioId());
-        String userLines = req.turns().stream()
-                .filter(t -> "user".equals(t.role()) && t.text() != null && !t.text().isBlank())
-                .map(t -> "- " + t.text())
+    private String buildReviewPrompt(ConversationScenario scenario, List<String> userLines, int durationSec) {
+        String lines = userLines.stream()
+                .filter(t -> t != null && !t.isBlank())
+                .map(t -> "- " + t)
                 .reduce("", (a, b) -> a + "\n" + b);
 
         return """
@@ -110,7 +138,7 @@ private String buildReviewPrompt(ConversationReviewRequest req) {
                   "grammar_notes": [{"error": "<wrong>", "correction": "<correct>"}]
                 }
                 Max 3 grammar_notes. If user said very little, give low scores and encourage them.
-                """.formatted(scenario.displayName, req.durationSec(), userLines.isBlank() ? "(no speech)" : userLines);
+                """.formatted(scenario.displayName, durationSec, lines.isBlank() ? "(no speech)" : lines);
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
@@ -136,6 +164,18 @@ private String buildReviewPrompt(ConversationReviewRequest req) {
     @GetMapping("/scenarios")
     public ApiResponse<List<ScenarioResponse>> getScenarios() {
         return ApiResponse.ok(conversationService.getScenarios());
+    }
+
+    /** T2.2 — Lịch sử session realtime của user (mới nhất trước). */
+    @GetMapping("/history")
+    public ApiResponse<List<ConversationSession>> history() {
+        return ApiResponse.ok(realtimeService.getSessionHistory(currentUserId()));
+    }
+
+    /** T2.2 — Chi tiết 1 session: turns server-observed + review (summary JSON). */
+    @GetMapping("/{sessionId}/detail")
+    public ApiResponse<ConversationSession> sessionDetail(@PathVariable UUID sessionId) {
+        return ApiResponse.ok(realtimeService.getOwnedSession(sessionId, currentUserId()));
     }
 
     @PostMapping("/start")

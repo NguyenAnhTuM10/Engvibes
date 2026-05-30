@@ -63,8 +63,8 @@ export interface RealtimeTokenResponse {
 }
 
 export interface ConversationReviewRequest {
-  scenarioId: string
-  turns: { role: 'user' | 'assistant'; text: string }[]
+  // T2.2 — sessionId là nguồn transcript chính thức; server tự load, không nhận turns.
+  sessionId: string
   durationSec: number
 }
 

@@ -50,9 +50,11 @@ public class ConversationProxyWebSocketHandler extends AbstractWebSocketHandler 
     @Value("${app.conversation.daily-session-limit:10}")
     private int dailySessionLimit;
 
-    private final JwtService       jwtService;
-    private final UserRepository   userRepository;
-    private final RateLimitService rateLimitService;
+    private final JwtService                   jwtService;
+    private final UserRepository               userRepository;
+    private final RateLimitService             rateLimitService;
+    private final ConversationRealtimeService  realtimeService;
+    private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
 
     private final HttpClient httpClient = HttpClient.newHttpClient();
     private final ScheduledExecutorService scheduler =
@@ -68,13 +70,21 @@ public class ConversationProxyWebSocketHandler extends AbstractWebSocketHandler 
     private final Map<String, UUID>               userIds        = new ConcurrentHashMap<>();
     private final Map<String, Instant>            sessionStarts  = new ConcurrentHashMap<>();
     private final Map<String, ScheduledFuture<?>> timers         = new ConcurrentHashMap<>();
+    // T2: DB session id + server-observed transcript buffer per WS connection
+    private final Map<String, UUID> dbSessionIds = new ConcurrentHashMap<>();
+    private final Map<String, java.util.List<ConversationRealtimeService.TranscriptEntry>> transcriptBuffers =
+            new ConcurrentHashMap<>();
 
     public ConversationProxyWebSocketHandler(JwtService jwtService,
                                              UserRepository userRepository,
-                                             RateLimitService rateLimitService) {
+                                             RateLimitService rateLimitService,
+                                             ConversationRealtimeService realtimeService,
+                                             com.fasterxml.jackson.databind.ObjectMapper objectMapper) {
         this.jwtService       = jwtService;
         this.userRepository   = userRepository;
         this.rateLimitService = rateLimitService;
+        this.realtimeService  = realtimeService;
+        this.objectMapper     = objectMapper;
     }
 
     // ── Connection lifecycle ──────────────────────────────────────────────
@@ -123,6 +133,21 @@ public class ConversationProxyWebSocketHandler extends AbstractWebSocketHandler 
         textBuffers.put(sid, new StringBuilder());
         userIds.put(sid, userId);
         sessionStarts.put(sid, Instant.now());
+        transcriptBuffers.put(sid, new java.util.concurrent.CopyOnWriteArrayList<>());
+
+        // ── T2.1: persist ConversationSession (status=ACTIVE) ──────────────
+        UUID dbSessionId = realtimeService.createSession(userId, scenario.name()).getId();
+        dbSessionIds.put(sid, dbSessionId);
+        log.info("[conv-proxy] Created DB session={} for sid={}", dbSessionId, sid);
+
+        // Báo DB sessionId cho browser — frontend dùng để gọi /realtime-review.
+        // Custom event app.* không phải event OpenAI; frontend filter theo prefix.
+        try {
+            session.sendMessage(new TextMessage(
+                    "{\"type\":\"app.session_created\",\"sessionId\":\"" + dbSessionId + "\"}"));
+        } catch (IOException e) {
+            log.warn("[conv-proxy] Could not send app.session_created sid={}: {}", sid, e.getMessage());
+        }
 
         // ── T1.2 (a): Hard time cap ───────────────────────────────────────
         ScheduledFuture<?> timer = scheduler.schedule(() -> {
@@ -140,15 +165,50 @@ public class ConversationProxyWebSocketHandler extends AbstractWebSocketHandler 
     protected void handleTextMessage(WebSocketSession session, TextMessage message) {
         String payload = message.getPayload();
 
-        // Drop client session.update — server owns session config (T1.1)
+        WebSocket openAiWs = openAiSessions.get(session.getId());
+        if (openAiWs == null) return;
+
+        // T1.1 — Strip sensitive fields from client session.update.
+        // Client vẫn được set audio format (cần cho mic), nhưng instructions/voice/
+        // tools/model do SERVER sở hữu → loại khỏi message trước khi forward.
         if (isSessionUpdate(payload)) {
-            log.warn("[conv-proxy] Blocked client session.update sid={}", session.getId());
+            String sanitized = stripSensitiveFields(payload, session.getId());
+            if (sanitized != null) openAiWs.sendText(sanitized, true);
             return;
         }
 
-        WebSocket openAiWs = openAiSessions.get(session.getId());
-        if (openAiWs != null) {
-            openAiWs.sendText(payload, true);
+        openAiWs.sendText(payload, true);
+    }
+
+    /**
+     * T1.1 — Xoá instructions/voice/tools/model khỏi session.update của client.
+     * Trả về JSON đã sanitize, hoặc null nếu parse lỗi (an toàn: drop hẳn).
+     */
+    private String stripSensitiveFields(String payload, String sid) {
+        try {
+            var root = (com.fasterxml.jackson.databind.node.ObjectNode) objectMapper.readTree(payload);
+            var sess = root.get("session");
+            if (sess instanceof com.fasterxml.jackson.databind.node.ObjectNode sessionNode) {
+                boolean removed = false;
+                for (String f : new String[]{"instructions", "voice", "tools", "model"}) {
+                    if (sessionNode.remove(f) != null) removed = true;
+                }
+                // Nested: session.audio.output.voice (API shape mới)
+                var audio = sessionNode.get("audio");
+                if (audio instanceof com.fasterxml.jackson.databind.node.ObjectNode audioNode) {
+                    var output = audioNode.get("output");
+                    if (output instanceof com.fasterxml.jackson.databind.node.ObjectNode outNode) {
+                        if (outNode.remove("voice") != null) removed = true;
+                    }
+                }
+                if (removed) {
+                    log.warn("[conv-proxy] Stripped sensitive fields from client session.update sid={}", sid);
+                }
+            }
+            return objectMapper.writeValueAsString(root);
+        } catch (Exception e) {
+            log.warn("[conv-proxy] Could not sanitize session.update sid={}, dropping: {}", sid, e.getMessage());
+            return null;
         }
     }
 
@@ -165,6 +225,19 @@ public class ConversationProxyWebSocketHandler extends AbstractWebSocketHandler 
 
         UUID uid = userIds.remove(sid);
         Instant start = sessionStarts.remove(sid);
+        UUID dbSessionId = dbSessionIds.remove(sid);
+        var transcripts = transcriptBuffers.remove(sid);
+
+        // ── T2.1 + T2.2: persist turns + complete session từ data server-observed ──
+        if (dbSessionId != null && uid != null) {
+            try {
+                realtimeService.completeSession(dbSessionId, uid,
+                        transcripts != null ? transcripts : java.util.List.of());
+            } catch (Exception e) {
+                log.error("[conv-proxy] Failed to complete session={}: {}", dbSessionId, e.getMessage());
+            }
+        }
+
         if (uid != null && start != null) {
             long seconds = java.time.Duration.between(start, Instant.now()).getSeconds();
             log.info("[conv-proxy] Session closed sid={} user={} duration={}s status={}",
@@ -242,6 +315,11 @@ public class ConversationProxyWebSocketHandler extends AbstractWebSocketHandler 
             log.info("[conv-proxy] Sent authoritative session.update sid={}", browserSession.getId());
         }
 
+        // T2.2 — Observe transcript events server-side (authoritative).
+        // User turn: input audio transcription completed.
+        // AI turn:   response output audio transcript done.
+        observeTranscript(browserSession.getId(), msg);
+
         // Log sự kiện quan trọng
         if (msg.contains("\"type\":\"error\"")) {
             log.error("[conv-proxy] OpenAI error event: {}",
@@ -263,40 +341,55 @@ public class ConversationProxyWebSocketHandler extends AbstractWebSocketHandler 
     }
 
     /**
-     * T1.1 — Gửi session.update với config do server build.
-     * Bao gồm instructions (từ scenario.buildRealtimeInstructions()),
-     * voice (từ application.yml), và transcription config.
+     * T2.2 — Gom transcript từ stream OpenAI vào buffer server-side.
+     * Đây là transcript CHÍNH THỨC dùng để chấm điểm — client không can thiệp được.
+     */
+    private void observeTranscript(String sid, String msg) {
+        var buffer = transcriptBuffers.get(sid);
+        if (buffer == null) return;
+
+        boolean isUserTurn = msg.contains("\"type\":\"conversation.item.input_audio_transcription.completed\"");
+        boolean isAiTurn   = msg.contains("\"type\":\"response.output_audio_transcript.done\"");
+        if (!isUserTurn && !isAiTurn) return;
+
+        try {
+            var node = objectMapper.readTree(msg);
+            String transcript = node.path("transcript").asText("");
+            if (transcript.isBlank()) return;
+
+            String role = isUserTurn ? "user" : "assistant";
+            buffer.add(new ConversationRealtimeService.TranscriptEntry(role, transcript.trim()));
+            log.debug("[conv-proxy] Observed {} transcript sid={}: {}", role, sid,
+                    transcript.length() > 60 ? transcript.substring(0, 60) + "…" : transcript);
+        } catch (Exception e) {
+            log.warn("[conv-proxy] Failed to parse transcript event sid={}: {}", sid, e.getMessage());
+        }
+    }
+
+    /**
+     * T1.1 — Gửi session.update với config server-owned, dùng API shape mới
+     * (gpt-realtime-2): instructions + audio.output.voice. Đây là minimal PATCH —
+     * chỉ field server sở hữu, merge với audio-format do client set sau đó.
+     * Build bằng Jackson để escape JSON đúng (instructions có newline/quote).
      */
     private void sendServerSessionUpdate(WebSocket openAiWs, ConversationScenario scenario) {
-        String instructions = scenario.buildRealtimeInstructions();
-        // Escape JSON string (newlines, quotes)
-        String instructionsJson = instructions
-                .replace("\\", "\\\\")
-                .replace("\"", "\\\"")
-                .replace("\n", "\\n")
-                .replace("\r", "")
-                .replace("\t", "\\t");
+        try {
+            var session = objectMapper.createObjectNode();
+            session.put("instructions", scenario.buildRealtimeInstructions());
+            session.set("audio", objectMapper.createObjectNode()
+                    .set("output", objectMapper.createObjectNode().put("voice", realtimeVoice)));
 
-        String payload = """
-                {
-                  "type": "session.update",
-                  "session": {
-                    "modalities": ["text", "audio"],
-                    "voice": "%s",
-                    "instructions": "%s",
-                    "input_audio_transcription": { "model": "whisper-1" },
-                    "turn_detection": {
-                      "type": "server_vad",
-                      "silence_duration_ms": 500,
-                      "threshold": 0.5
-                    }
-                  }
-                }""".formatted(realtimeVoice, instructionsJson);
+            var root = objectMapper.createObjectNode();
+            root.put("type", "session.update");
+            root.set("session", session);
 
-        openAiWs.sendText(payload, true).exceptionally(e -> {
-            log.error("[conv-proxy] Failed to send session.update: {}", e.getMessage());
-            return null;
-        });
+            openAiWs.sendText(objectMapper.writeValueAsString(root), true).exceptionally(e -> {
+                log.error("[conv-proxy] Failed to send session.update: {}", e.getMessage());
+                return null;
+            });
+        } catch (Exception e) {
+            log.error("[conv-proxy] Could not build server session.update: {}", e.getMessage());
+        }
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────

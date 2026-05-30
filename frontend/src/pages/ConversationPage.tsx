@@ -263,6 +263,8 @@ export default function ConversationPage() {
   const messagesEndRef  = useRef<HTMLDivElement>(null)
   // ID của item AI đang phát — cần cho conversation.item.truncate khi bị ngắt lời.
   const activeResponseItemRef = useRef<string | null>(null)
+  // T2 — DB session id do server tạo (gửi qua event app.session_created).
+  const dbSessionIdRef = useRef<string | null>(null)
 
   const { data: scenarios } = useScenarios()
   const review = useConversationReview()
@@ -337,6 +339,11 @@ export default function ConversationPage() {
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data as string)
       switch (data.type) {
+        // T2 — server báo DB sessionId, lưu lại để dùng khi review.
+        case 'app.session_created':
+          dbSessionIdRef.current = data.sessionId
+          break
+
         case 'session.created':
           ws.send(JSON.stringify({
             type: 'session.update',
@@ -457,13 +464,17 @@ export default function ConversationPage() {
     setStage('reviewing')
 
     const durationSec = Math.floor((Date.now() - startTimeRef.current) / 1000)
+    const sessionId = dbSessionIdRef.current
 
+    if (!sessionId) {
+      // Không có session server → không thể chấm (transcript ở server)
+      setStage('pick')
+      return
+    }
+
+    // T2.2 — chỉ gửi sessionId + duration; server tự load transcript chính thức.
     review.mutate(
-        {
-          scenarioId: sessionInfo!.id,
-          turns: messages,
-          durationSec,
-        },
+        { sessionId, durationSec },
         {
           onSuccess: (data) => {
             setFeedback(data)
@@ -472,7 +483,7 @@ export default function ConversationPage() {
           onError: () => setStage('active'),
         },
     )
-  }, [cleanup, messages, sessionInfo, review])
+  }, [cleanup, review])
 
   const handlePickScenario = useCallback(
       (scenario: ConversationScenario) => {
