@@ -35,6 +35,12 @@ Endpoint phục vụ (JWT):
 |---|---|---|
 | GET | `/api/pronunciation/words?group=` | Words, lọc theo nhóm âm (bỏ trống = tất cả) |
 | GET | `/api/pronunciation/sentences?category=` | Sentences, lọc theo category |
+| GET | `/api/pronunciation/videos` | Video đã PUBLISHED **và có phụ đề** → nguồn câu luyện ("From Video") |
+
+**From Video:** trang Pronunciation có tab thứ ba *"From Video"* — chọn 1 video
+(lấy từ endpoint trên), liệt kê câu phụ đề (`GET /api/videos/{id}/subtitles`),
+bấm 1 câu để luyện như SENTENCE bình thường (qua pipeline + nối SRS y hệt). Nối
+liền 2 feature /video ↔ /pronunciation, không trùng lặp backend.
 
 IPA của nội dung dùng **đúng inventory `ARPA_TO_IPA`** của service (ví dụ schwa
 viết `ʌ`, nguyên âm dài `-y` viết `iː`), để IPA hiển thị khớp với phía target mà
@@ -58,6 +64,8 @@ xát/cụm phụ âm của tiếng Anh. Các nhóm dưới đây nhắm thẳng 
 | **Vowels** | `ɪ iː æ ʌ ɔː oʊ ʊ uː` | Tiếng Việt không phân biệt nguyên âm dài/ngắn căng-chùng như tiếng Anh. |
 | **Short vs Long Vowels** | `/æ ʌ ɑː/`, `/ɪ iː/`, `/ʊ uː/` | Cặp tối thiểu tách rõ dài/ngắn: *ship↔sheep, full↔fool, cat↔cut↔cart*. |
 | **Clusters** | cụm phụ âm | Tiếng Việt không có cụm phụ âm → bị chèn nguyên âm hoặc lược: *strength, twelfth, months*. |
+| **ED Endings** | `/t/ /d/ /ɪd/` | Quy tắc đuôi `-ed` (quá khứ) hay bị bỏ hoặc thêm âm tiết sai: *worked /t/, played /d/, wanted /ɪd/*. |
+| **Diphthongs** | `eɪ aɪ ɔɪ aʊ oʊ` | Nguyên âm đôi hay bị đọc thành nguyên âm đơn, không trượt: *day, high, boy, now, go*. |
 
 ### Sentences
 
@@ -69,6 +77,8 @@ xát/cụm phụ âm của tiếng Anh. Các nhóm dưới đây nhắm thẳng 
 | **Final Sound Drills** | Câu nhồi phụ âm cuối bật rõ — chống lỗi nuốt âm cuối. |
 | **Tongue Twisters** | Líu lưỡi luyện 1 âm cường độ cao (`She sells seashells…`). |
 | **Numbers & Dates** | Chỗ hay vấp: *thirteen↔thirty*, năm *1985*, *$3.50*. |
+| **Travel & Directions** | Câu giao tiếp khi đi lại/hỏi đường. |
+| **Phone & Email** | Câu gọi điện / xác nhận / chuyển máy. |
 
 Mỗi câu drill gắn `level` (B1/B2/C1) và `targetSound` (IPA âm trọng tâm).
 
@@ -86,7 +96,7 @@ Kiểm tra: mọi word đủ field; `ipa` parse được; mọi phoneme của `i
 `targetSound` nằm trong inventory; in bảng đếm coverage mỗi nhóm. Exit code ≠ 0
 nếu có lỗi.
 
-Hiện tại: **117 words / 9 nhóm**, **64 sentences / 8 category** — tất cả hợp lệ
+Hiện tại: **137 words / 11 nhóm**, **76 sentences / 10 category** — tất cả hợp lệ
 (validator còn kiểm `vi`/`commonError`/`tip` không rỗng; `minimalPair` optional).
 
 > Windows: `python` console mặc định cp1258 sẽ làm hỏng hiển thị IPA khi pipe.

@@ -4,6 +4,7 @@ import com.englishapp.common.ApiException;
 import com.englishapp.pronunciation.dto.*;
 import com.englishapp.sm2.SoundsToPracticeService;
 import com.englishapp.sm2.dto.SoundCardChange;
+import com.englishapp.video.subtitle.SubtitleRepository;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -23,6 +24,19 @@ public class PronunciationService {
     private final PronunciationAttemptRepository attemptRepo;
     private final ObjectMapper objectMapper;
     private final SoundsToPracticeService soundsToPractice;
+    private final SubtitleRepository subtitleRepo;
+
+    /** Video đã PUBLISHED và có phụ đề — nguồn câu luyện phát âm (picker "From Video"). */
+    @Transactional(readOnly = true)
+    public List<com.englishapp.pronunciation.dto.VideoSentenceSource> getVideoSentenceSources() {
+        return subtitleRepo.findPublishedVideosWithSubtitles().stream()
+                .map(row -> new com.englishapp.pronunciation.dto.VideoSentenceSource(
+                        UUID.fromString(row[0].toString()),
+                        row[1] == null ? "" : row[1].toString(),
+                        row[2] == null ? null : row[2].toString(),
+                        row[3] == null ? 0 : ((Number) row[3]).intValue()))
+                .toList();
+    }
 
     // ── Sessions ─────────────────────────────────────────────────────────
 

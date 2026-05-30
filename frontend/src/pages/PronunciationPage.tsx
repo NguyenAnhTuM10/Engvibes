@@ -12,7 +12,9 @@ import {
   useAttempts,
   useWords,
   useSentences,
+  useVideoSources,
 } from '@/features/pronunciation/api'
+import { useVideoSubtitles } from '@/features/videos/api'
 import type {
   PronunciationSentence,
   PronunciationWord,
@@ -20,7 +22,7 @@ import type {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { RotateCcw, Trophy, Volume2, BookOpen, Type } from 'lucide-react'
+import { RotateCcw, Trophy, Volume2, BookOpen, Type, Film } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const LEVEL_COLOR: Record<string, string> = {
@@ -41,13 +43,14 @@ function groupBy<T>(items: T[], key: (item: T) => string): Record<string, T[]> {
 
 // ── Component ───────────────────────────────────────────────────────────────
 
-type Mode = 'word' | 'sentence'
+type Mode = 'word' | 'sentence' | 'video'
 
 export default function PronunciationPage() {
   const qc = useQueryClient()
 
   const { data: words } = useWords()
   const { data: sentences } = useSentences()
+  const { data: videoSources } = useVideoSources()
 
   const wordGroups = useMemo(
     () => groupBy(words ?? [], (w) => w.group),
@@ -66,6 +69,11 @@ export default function PronunciationPage() {
   const [activeSentence, setActiveSentence] = useState<string | null>(null)
   const [activeGroup,    setActiveGroup]    = useState<string | null>(null)
   const [activeSentGrp,  setActiveSentGrp]  = useState<string | null>(null)
+  const [activeVideoId,  setActiveVideoId]  = useState<string | null>(null)
+
+  // Phụ đề của video đang chọn (tái dùng hook của feature videos)
+  const { data: videoSubs, isLoading: subsLoading } = useVideoSubtitles(activeVideoId ?? '')
+  const activeVideo = (videoSources ?? []).find((v) => v.id === activeVideoId)
 
   const createSession  = useCreateSession()
   const submitAttempt  = useSubmitAttempt(sessionId ?? '')
@@ -115,6 +123,12 @@ export default function PronunciationPage() {
     resetResult()
   }
 
+  const TABS: { id: Mode; label: string; icon: typeof Type }[] = [
+    { id: 'word',     label: 'Words',     icon: Type },
+    { id: 'sentence', label: 'Sentences', icon: BookOpen },
+    { id: 'video',    label: 'From Video', icon: Film },
+  ]
+
   const bestScore = attempts?.length
     ? Math.max(...attempts.map((a) => a.overallScore))
     : null
@@ -131,30 +145,21 @@ export default function PronunciationPage() {
 
       {/* Mode tabs */}
       <div className="flex gap-2 p-1 bg-muted rounded-lg w-fit">
-        <button
-          onClick={() => switchMode('word')}
-          className={cn(
-            'flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors',
-            mode === 'word'
-              ? 'bg-background shadow-sm text-foreground'
-              : 'text-muted-foreground hover:text-foreground',
-          )}
-        >
-          <Type className="h-4 w-4" />
-          Words
-        </button>
-        <button
-          onClick={() => switchMode('sentence')}
-          className={cn(
-            'flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors',
-            mode === 'sentence'
-              ? 'bg-background shadow-sm text-foreground'
-              : 'text-muted-foreground hover:text-foreground',
-          )}
-        >
-          <BookOpen className="h-4 w-4" />
-          Sentences
-        </button>
+        {TABS.map(({ id, label, icon: Icon }) => (
+          <button
+            key={id}
+            onClick={() => switchMode(id)}
+            className={cn(
+              'flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors',
+              mode === id
+                ? 'bg-background shadow-sm text-foreground'
+                : 'text-muted-foreground hover:text-foreground',
+            )}
+          >
+            <Icon className="h-4 w-4" />
+            {label}
+          </button>
+        ))}
       </div>
 
       {/* ── Words selector ── */}
@@ -267,6 +272,61 @@ export default function PronunciationPage() {
         </Card>
       )}
 
+      {/* ── From Video selector ── */}
+      {mode === 'video' && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium">Pick a video, then a line to practise</CardTitle>
+            <div className="flex flex-wrap gap-1.5 mt-2">
+              {(videoSources ?? []).map((v) => (
+                <button
+                  key={v.id}
+                  onClick={() => { setActiveVideoId(v.id); setActiveSentence(null); setSessionId(null); resetResult() }}
+                  className={cn(
+                    'px-3 py-1 rounded-full text-xs font-medium border transition-colors max-w-[14rem] truncate',
+                    activeVideoId === v.id
+                      ? 'bg-primary text-primary-foreground border-primary'
+                      : 'border-muted hover:border-primary/50 text-muted-foreground',
+                  )}
+                  title={v.title}
+                >
+                  {v.title} · {v.sentenceCount}
+                </button>
+              ))}
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {!activeVideoId ? (
+              <p className="text-sm text-muted-foreground text-center py-4">
+                {(videoSources?.length ?? 0) === 0
+                  ? 'Chưa có video nào kèm phụ đề.'
+                  : 'Chọn một video ở trên để xem các câu.'}
+              </p>
+            ) : subsLoading ? (
+              <p className="text-sm text-muted-foreground text-center py-4">Đang tải phụ đề…</p>
+            ) : (videoSubs ?? []).length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-4">Video này chưa có phụ đề.</p>
+            ) : (
+              (videoSubs ?? []).map((seg) => (
+                <button
+                  key={seg.id}
+                  onClick={() => handleSelect(seg.text, 'SENTENCE')}
+                  disabled={createSession.isPending}
+                  className={cn(
+                    'w-full text-left px-4 py-3 rounded-lg border text-sm transition-all leading-relaxed',
+                    activeSentence === seg.text
+                      ? 'bg-primary/5 border-primary shadow-sm'
+                      : 'border-muted hover:border-primary/40 hover:bg-accent',
+                  )}
+                >
+                  {seg.text}
+                </button>
+              ))
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {/* ── Practice area ── */}
       {activeText && sessionId && (
         <>
@@ -355,6 +415,14 @@ export default function PronunciationPage() {
                     <p className="text-muted-foreground">💡 {activeSentEntry.tip}</p>
                   </div>
                 )}
+
+                {/* Nguồn câu lấy từ video */}
+                {mode === 'video' && activeVideo && (
+                  <p className="text-sm text-muted-foreground pt-1 flex items-center justify-center gap-1.5">
+                    <Film className="h-3.5 w-3.5 shrink-0" />
+                    Từ video: <span className="text-foreground font-medium">{activeVideo.title}</span>
+                  </p>
+                )}
               </div>
 
               {/* Best score */}
@@ -398,7 +466,7 @@ export default function PronunciationPage() {
           {/* Recorder / Retry */}
           {!result ? (
             <AudioRecorder
-              maxDurationSec={mode === 'sentence' ? 30 : 15}
+              maxDurationSec={mode === 'word' ? 15 : 30}
               isSubmitting={isProcessing || submitAttempt.isPending}
               onSubmit={handleSubmit}
               disabled={createSession.isPending}
@@ -478,7 +546,11 @@ export default function PronunciationPage() {
       {!activeText && (
         <div className="text-center py-12 text-muted-foreground">
           <p className="text-lg">
-            {mode === 'word' ? 'Select a word above to start' : 'Select a sentence above to start'}
+            {mode === 'word'
+              ? 'Select a word above to start'
+              : mode === 'sentence'
+                ? 'Select a sentence above to start'
+                : 'Pick a video and a line above to start'}
           </p>
           <p className="text-sm mt-1">Record your voice and get instant phoneme feedback</p>
         </div>

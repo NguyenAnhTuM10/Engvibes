@@ -5,7 +5,17 @@ import type {
   PronunciationSentence,
   PronunciationSession,
   PronunciationWord,
+  VideoSentenceSource,
 } from './types'
+
+// Nội dung tĩnh: video (đã publish + có phụ đề) để lấy câu luyện phát âm
+export function useVideoSources() {
+  return useQuery({
+    queryKey: ['pronunciation-video-sources'],
+    queryFn: () => api.get<VideoSentenceSource[]>('/api/pronunciation/videos').then(r => r.data),
+    staleTime: 5 * 60_000,
+  })
+}
 
 // Nội dung tĩnh: danh sách từ luyện phát âm (kèm IPA + câu ví dụ)
 export function useWords() {

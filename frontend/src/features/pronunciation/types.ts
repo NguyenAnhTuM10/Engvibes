@@ -20,6 +20,14 @@ export interface PronunciationSentence {
   tip: string                // ghi chú trọng tâm luyện
 }
 
+// Video (đã publish + có phụ đề) làm nguồn câu luyện phát âm
+export interface VideoSentenceSource {
+  id: string
+  title: string
+  cefrLevel: string | null
+  sentenceCount: number
+}
+
 export interface WordAnalysis {
   word: string
   heard: string | null
