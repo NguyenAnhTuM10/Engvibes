@@ -35,6 +35,7 @@ public class SecurityConfig {
                 .requestMatchers(
                     "/api/auth/**",
                     "/api/health",
+                    "/api/sm2/**",   // demo: no auth needed
                     "/ws/**",
                     "/v3/api-docs/**",
                     "/swagger-ui/**",
