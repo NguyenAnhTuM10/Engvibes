@@ -7,7 +7,7 @@ export function useCreateSession() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (params: { targetText: string; sessionType?: string }) =>
-      api.post<PronunciationSession>('/pronunciation/sessions', {
+      api.post<PronunciationSession>('/api/pronunciation/sessions', {
         targetText: params.targetText,
         sessionType: params.sessionType ?? 'WORD',
       }).then(r => r.data),
@@ -20,7 +20,7 @@ export function useSession(sessionId: string | null) {
   return useQuery({
     queryKey: ['pronunciation-session', sessionId],
     queryFn: () =>
-      api.get<PronunciationSession>(`/pronunciation/sessions/${sessionId}`).then(r => r.data),
+      api.get<PronunciationSession>(`/api/pronunciation/sessions/${sessionId}`).then(r => r.data),
     enabled: !!sessionId,
     staleTime: 10_000,
   })
@@ -31,7 +31,7 @@ export function useAttempts(sessionId: string | null) {
   return useQuery({
     queryKey: ['pronunciation-attempts', sessionId],
     queryFn: () =>
-      api.get<AttemptResult[]>(`/pronunciation/sessions/${sessionId}/attempts`).then(r => r.data),
+      api.get<AttemptResult[]>(`/api/pronunciation/sessions/${sessionId}/attempts`).then(r => r.data),
     enabled: !!sessionId,
   })
 }
@@ -43,7 +43,7 @@ export function useSubmitAttempt(sessionId: string) {
     mutationFn: (audioBlob: Blob) => {
       const form = new FormData()
       form.append('audio', audioBlob, 'recording.webm')
-      return api.post<string>(`/pronunciation/sessions/${sessionId}/attempt`, form, {
+      return api.post<string>(`/api/pronunciation/sessions/${sessionId}/attempt`, form, {
         headers: { 'Content-Type': 'multipart/form-data' },
         timeout: 10_000,  // chỉ chờ 202, không chờ kết quả
       }).then(r => r.data)  // trả về attemptId (UUID string)
