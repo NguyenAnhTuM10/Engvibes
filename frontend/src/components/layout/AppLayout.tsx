@@ -13,6 +13,7 @@ import {
   Mic,
   MessageSquare,
   AudioLines,
+  GraduationCap,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -33,6 +34,7 @@ const navItems: NavItem[] = [
   { label: 'Videos', href: '/videos', icon: <Play className="h-4 w-4" /> },
   { label: 'Speaking', href: '/speak', icon: <Mic className="h-4 w-4" /> },
   { label: 'Pronunciation', href: '/pronunciation', icon: <AudioLines className="h-4 w-4" /> },
+  { label: 'Vocabulary', href: '/vocab', icon: <GraduationCap className="h-4 w-4" /> },
   { label: 'Conversation', href: '/conversation', icon: <MessageSquare className="h-4 w-4" /> },
   { label: 'Decks', href: '/decks', icon: <BookOpen className="h-4 w-4" /> },
   { label: 'Progress', href: '/progress', icon: <TrendingUp className="h-4 w-4" /> },

@@ -19,6 +19,9 @@ const VideoWatchPage = lazy(() => import('@/pages/VideoWatchPage'))
 const SpeakPracticePage = lazy(() => import('@/pages/SpeakPracticePage'))
 const ConversationPage = lazy(() => import('@/pages/ConversationPage'))
 const PronunciationPage = lazy(() => import('@/pages/PronunciationPage'))
+const VocabPage       = lazy(() => import('@/pages/VocabPage'))
+const VocabDeckPage   = lazy(() => import('@/pages/VocabDeckPage'))
+const VocabReviewPage = lazy(() => import('@/pages/VocabReviewPage'))
 
 function PageLoader() {
   return (
@@ -68,6 +71,9 @@ const router = createBrowserRouter([
       { path: 'speak', element: <Wrap><SpeakPracticePage /></Wrap> },
       { path: 'conversation', element: <Wrap><ConversationPage /></Wrap> },
       { path: 'pronunciation', element: <Wrap><PronunciationPage /></Wrap> },
+      { path: 'vocab', element: <Wrap><VocabPage /></Wrap> },
+      { path: 'vocab/:id', element: <Wrap><VocabDeckPage /></Wrap> },
+      { path: 'vocab/:id/review', element: <Wrap><VocabReviewPage /></Wrap> },
       {
         path: 'admin/videos',
         element: (
