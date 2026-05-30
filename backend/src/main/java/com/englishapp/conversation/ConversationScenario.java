@@ -164,4 +164,25 @@ public enum ConversationScenario {
         this.systemPrompt = systemPrompt;
         this.openingLine = openingLine;
     }
+
+    /**
+     * Instructions gửi cho OpenAI Realtime API — nguồn duy nhất, server-owned.
+     * T1.1: proxy gọi method này, KHÔNG để client tự build.
+     */
+    public String buildRealtimeInstructions() {
+        return """
+                You are %s, helping an English learner (B1-B2) practice real conversation.
+
+                SCENARIO: %s
+                LEARNER'S GOAL: %s
+
+                RULES:
+                - Speak naturally as your character — do NOT return JSON
+                - Keep each response to 1-3 sentences
+                - Be warm, encouraging, and supportive
+                - Gently rephrase major grammar mistakes naturally in your reply (don't lecture)
+                - Start the conversation with: "%s"
+                - After 5-6 user turns, wrap up the conversation naturally
+                """.formatted(aiRole, description, userGoal, openingLine);
+    }
 }

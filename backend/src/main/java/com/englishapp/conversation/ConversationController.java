@@ -40,7 +40,7 @@ public class ConversationController {
     public ApiResponse<RealtimeTokenResponse> getRealtimeToken(
             @Valid @RequestBody RealtimeTokenRequest req) {
         ConversationScenario scenario = parseScenario(req.scenarioId());
-        String instructions = buildRealtimeInstructions(scenario);
+        String instructions = scenario.buildRealtimeInstructions();
         String token = llmClient.getRealtimeToken(instructions, "alloy");
         return ApiResponse.ok(new RealtimeTokenResponse(
                 token,
@@ -84,25 +84,7 @@ public class ConversationController {
 
     // ── Internal helpers ───────────────────────────────────────────────────────
 
-    private String buildRealtimeInstructions(ConversationScenario scenario) {
-        return """
-                You are %s, helping an English learner (B1-B2) practice real conversation.
-
-                SCENARIO: %s
-                LEARNER'S GOAL: %s
-
-                RULES:
-                - Speak naturally as your character — do NOT return JSON
-                - Keep each response to 1-3 sentences
-                - Be warm, encouraging, and supportive
-                - Gently rephrase major grammar mistakes naturally in your reply (don't lecture)
-                - Start the conversation with: "%s"
-                - After 5-6 user turns, wrap up the conversation naturally
-                """.formatted(
-                scenario.aiRole, scenario.description, scenario.userGoal, scenario.openingLine);
-    }
-
-    private String buildReviewPrompt(ConversationReviewRequest req) {
+private String buildReviewPrompt(ConversationReviewRequest req) {
         ConversationScenario scenario = parseScenario(req.scenarioId());
         String userLines = req.turns().stream()
                 .filter(t -> "user".equals(t.role()) && t.text() != null && !t.text().isBlank())

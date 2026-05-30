@@ -75,6 +75,10 @@ app:
     model: ${OPENAI_MODEL:gpt-4o-mini}
     audio-model: ${OPENAI_AUDIO_MODEL:gpt-audio-mini}
     realtime-model: ${OPENAI_REALTIME_MODEL:gpt-realtime-2}
+    realtime-voice: ${OPENAI_REALTIME_VOICE:alloy}
+  conversation:
+    max-session-seconds: ${CONVERSATION_MAX_SECONDS:300}    # 5 min hard cap per session
+    daily-session-limit: ${CONVERSATION_DAILY_LIMIT:10}     # sessions per user per day
   pronunciation-service:
     url: ${PRONUNCIATION_SERVICE_URL:http://localhost:8000}
 
