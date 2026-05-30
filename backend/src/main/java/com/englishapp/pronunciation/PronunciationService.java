@@ -119,7 +119,7 @@ public class PronunciationService {
                 a.getOverallScore() != null ? a.getOverallScore() : 0,
                 a.getAccuracyScore() != null ? a.getAccuracyScore() : 0,
                 a.getFluencyScore() != null ? a.getFluencyScore() : 0,
-                phonemes, a.getCreatedAt());
+                phonemes, null, a.getCreatedAt());
     }
 
     private AttemptResponse toAttemptResponse(PronunciationAttempt a, AnalyzeResult result) {
@@ -131,7 +131,7 @@ public class PronunciationService {
         return new AttemptResponse(a.getId(), a.getAttemptNumber(), a.getTranscript(),
                 result.targetIpa(), result.actualIpa(),
                 result.overallScore(), result.accuracyScore(), result.fluencyScore(),
-                phonemes, a.getCreatedAt());
+                phonemes, result.wordAnalyses(), a.getCreatedAt());
     }
 
     private String serializePhonemeMatches(AnalyzeResult result) {

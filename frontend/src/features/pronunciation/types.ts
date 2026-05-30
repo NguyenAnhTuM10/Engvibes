@@ -1,3 +1,10 @@
+export interface WordAnalysis {
+  word: string
+  heard: string | null
+  wordIpa: string
+  score: number   // 0–100
+}
+
 export interface PhonemeMatch {
   position: number
   expected: string          // phoneme đúng, vd: "θ"
@@ -16,6 +23,7 @@ export interface AttemptResult {
   accuracyScore: number
   fluencyScore: number
   phonemeMatches: PhonemeMatch[]
+  wordAnalyses: WordAnalysis[] | null
   createdAt: string
 }
 

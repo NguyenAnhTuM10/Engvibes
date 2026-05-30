@@ -15,5 +15,6 @@ public record AttemptResponse(
         int accuracyScore,
         int fluencyScore,
         List<PhonemeMatch> phonemeMatches,
+        List<WordAnalysis> wordAnalyses,  // per-word breakdown (null khi load từ history)
         Instant createdAt
 ) {}

@@ -11,7 +11,8 @@ public record AnalyzeResult(
         @JsonProperty("phoneme_matches")   List<RawPhonemeMatch> phonemeMatches,
         @JsonProperty("accuracy_score")    int accuracyScore,
         @JsonProperty("fluency_score")     int fluencyScore,
-        @JsonProperty("overall_score")     int overallScore
+        @JsonProperty("overall_score")     int overallScore,
+        @JsonProperty("word_analyses")     List<WordAnalysis> wordAnalyses
 ) {
     // Inner record maps snake_case JSON fields từ Python
     public record RawPhonemeMatch(

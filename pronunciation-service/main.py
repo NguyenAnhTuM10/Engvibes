@@ -26,6 +26,13 @@ class PhonemeMatchResult(BaseModel):
     tip: str | None      # gợi ý sửa lỗi, chỉ có khi matched=False
 
 
+class WordAnalysisResult(BaseModel):
+    word: str
+    heard: str | None   # từ Whisper nhận ra tương ứng (None = bị bỏ sót)
+    word_ipa: str
+    score: int          # 0–100 phoneme accuracy cho từ này
+
+
 class AnalyzeResponse(BaseModel):
     target_ipa: str
     actual_ipa: str
@@ -33,10 +40,12 @@ class AnalyzeResponse(BaseModel):
     accuracy_score: int   # 0–100, tỉ lệ phoneme đúng
     fluency_score: int    # 0–100, MVP: dựa vào số phoneme user nói được
     overall_score: int    # 0.7 * accuracy + 0.3 * fluency
+    word_analyses: list[WordAnalysisResult] = []  # per-word breakdown
 
 
 # ---------------------------------------------------------------------------
 # Phoneme correction tips
+
 # Key: (expected_phoneme, actual_phoneme) dùng ký hiệu IPA
 # ---------------------------------------------------------------------------
 TIPS: dict[tuple[str, str], str] = {
@@ -185,6 +194,51 @@ def levenshtein_align(expected: list[str], actual: list[str]) -> list[tuple[str 
 
 
 # ---------------------------------------------------------------------------
+# Per-word analysis
+# ---------------------------------------------------------------------------
+
+def analyze_per_word(target_text: str, transcript: str) -> list[WordAnalysisResult]:
+    """So sánh từng từ trong target với từ Whisper nhận ra."""
+    target_words = [w for w in target_text.lower().split() if any(c.isalpha() for c in w)]
+    heard_words  = ([w for w in transcript.lower().strip().split() if any(c.isalpha() for c in w)]
+                    if transcript.strip() else [])
+
+    alignment = levenshtein_align(target_words, heard_words)
+    results: list[WordAnalysisResult] = []
+
+    for (exp_word, act_word) in alignment:
+        if exp_word is None:
+            continue  # bỏ từ thừa user nói
+        exp_clean = "".join(c for c in exp_word if c.isalpha())
+        word_ipa  = text_to_ipa_str(exp_clean)
+
+        if act_word is None:
+            results.append(WordAnalysisResult(word=exp_word, heard=None, word_ipa=word_ipa, score=0))
+            continue
+
+        exp_phones = split_ipa_to_phonemes(word_ipa)
+        act_clean  = "".join(c for c in act_word if c.isalpha())
+        act_ipa    = text_to_ipa_str(act_clean)
+        act_phones = split_ipa_to_phonemes(act_ipa)
+
+        if not exp_phones:
+            results.append(WordAnalysisResult(word=exp_word, heard=act_word, word_ipa=word_ipa, score=100))
+            continue
+
+        word_align    = levenshtein_align(exp_phones, act_phones)
+        w_correct     = sum(1 for e, a in word_align if e is not None and a is not None and e == a)
+        w_subs        = sum(1 for e, a in word_align if e is not None and a is not None and e != a)
+        w_del         = sum(1 for e, a in word_align if e is not None and a is None)
+        w_attempted   = w_correct + w_subs
+        w_accuracy    = int(w_correct / w_attempted * 100) if w_attempted > 0 else 0
+        w_fluency     = int((len(exp_phones) - w_del) / len(exp_phones) * 100)
+        score         = int(w_accuracy * 0.65 + w_fluency * 0.35)
+        results.append(WordAnalysisResult(word=exp_word, heard=act_word, word_ipa=word_ipa, score=score))
+
+    return results
+
+
+# ---------------------------------------------------------------------------
 # API endpoints
 # ---------------------------------------------------------------------------
 
@@ -210,19 +264,25 @@ def analyze(req: AnalyzeRequest) -> AnalyzeResponse:
     alignment = levenshtein_align(expected_phonemes, actual_phonemes)
 
     matches: list[PhonemeMatchResult] = []
-    matched_count = 0
+    correct       = 0
+    substitutions = 0
+    deletions     = 0
 
     for pos, (exp, act) in enumerate(alignment):
         is_match = (exp is not None) and (exp == act)
-        if is_match:
-            matched_count += 1
+        if exp is not None and act is not None:
+            if is_match:
+                correct += 1
+            else:
+                substitutions += 1
+        elif exp is not None and act is None:
+            deletions += 1
+        # insertions (exp=None, act!=None) — không tính vào score
 
         tip = None
         if exp and act and not is_match:
-            # Sai phoneme: có gợi ý
             tip = TIPS.get((exp, act)) or f"Practice the phoneme /{exp}/. Listen carefully and try again."
         elif exp and act is None:
-            # User bỏ sót phoneme
             tip = f"The sound /{exp}/ was missing. Make sure to pronounce every sound."
 
         matches.append(PhonemeMatchResult(
@@ -234,13 +294,18 @@ def analyze(req: AnalyzeRequest) -> AnalyzeResponse:
         ))
 
     total_expected = len(expected_phonemes)
-    accuracy = int(matched_count / total_expected * 100) if total_expected > 0 else 0
+    attempted = correct + substitutions  # phonemes user actually produced
 
-    # Fluency MVP: nếu user phát âm ≥80% số phoneme dự kiến → full fluency score
-    coverage_ratio = len(actual_phonemes) / total_expected if total_expected > 0 else 0
-    fluency = 85 if coverage_ratio >= 0.8 else int(coverage_ratio * 100)
+    # Accuracy: chất lượng phoneme đã phát âm (correct / attempted) — không phạt deletions
+    accuracy = int(correct / attempted * 100) if attempted > 0 else 0
 
-    overall = int(accuracy * 0.7 + fluency * 0.3)
+    # Fluency: độ đầy đủ phoneme (penalizes deletions only, không penalize substitutions)
+    fluency = int((total_expected - deletions) / total_expected * 100) if total_expected > 0 else 0
+
+    # Overall: weighted, cả hai phải tốt mới cao
+    overall = int(accuracy * 0.65 + fluency * 0.35)
+
+    word_analyses = analyze_per_word(req.target_text, req.transcript)
 
     return AnalyzeResponse(
         target_ipa=target_ipa,
@@ -249,6 +314,7 @@ def analyze(req: AnalyzeRequest) -> AnalyzeResponse:
         accuracy_score=accuracy,
         fluency_score=fluency,
         overall_score=overall,
+        word_analyses=word_analyses,
     )
 
 

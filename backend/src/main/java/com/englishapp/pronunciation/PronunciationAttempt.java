@@ -2,6 +2,8 @@ package com.englishapp.pronunciation;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -36,6 +38,7 @@ public class PronunciationAttempt {
     private Integer fluencyScore;
 
     // JSON array: [{position, expected, actual, matched, tip}]
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(columnDefinition = "JSONB")
     private String phonemeDetail;
 
