@@ -360,14 +360,53 @@ def score_alignment(alignment: list[tuple[str | None, str | None]],
 
 
 # ---------------------------------------------------------------------------
-# Per-word analysis  (proportional segmentation, không cần word boundary)
+# Connected speech: từ chức năng ngắn hay bị "swallowed" (nuốt) khi nói nối.
+#
+# Khi per-word alignment cho score=0 VỚI các từ này, rất có thể là false-negative
+# của proportional segmentation (không có word boundary) chứ không phải user
+# thực sự không phát âm. Gán _REDUCED_SCORE (55) thay vì 0 để badge không đỏ giả.
+# Ref: connected speech reduction — Celce-Murcia et al. "Teaching English Pronunciation"
 # ---------------------------------------------------------------------------
+
+_FUNCTION_WORDS: frozenset[str] = frozenset({
+    # Articles / determiners
+    "a", "an", "the",
+    # Prepositions ≤2 phonemes
+    "to", "of", "for", "in", "on", "at", "by", "as", "or", "nor",
+    # Conjunctions
+    "and", "but", "so", "yet",
+    # Auxiliary verbs
+    "is", "are", "was", "were", "be", "am", "been",
+    "do", "did", "does",
+    "can", "could", "will", "would", "shall", "should", "may", "might", "must",
+    # Pronouns (short)
+    "it", "its", "i", "my", "me", "us", "our",
+    "he", "him", "his", "she", "her",
+    "we", "they", "them", "their", "you", "your",
+    # Misc function words
+    "not", "no", "nor", "than", "then",
+    # Homophones / near-homophones of function words that also reduce:
+    "two",   # /tuː/ = identical phoneme sequence to "to" → reduces identically
+    "too",   # /tuː/ same
+    "one",   # often /wʌn/ → reduces in fast speech
+})
+
+# Score assigned when a short function word is likely reduced, not missed.
+# 55 = neutral yellow range — "present but not fully clear".
+_REDUCED_SCORE = 55
+
+
+def _likely_reduced(word: str, n_phonemes: int, score: int) -> bool:
+    """True khi từ ngắn hay bị nuốt trong connected speech → không nên phạt 0."""
+    return score < 60 and n_phonemes <= 2 and word in _FUNCTION_WORDS
+
 
 def analyze_per_word(target_text: str,
                      actual_phonemes: list[str]) -> list[WordAnalysisResult]:
     """
     Chia đều actual_phonemes theo tỉ lệ số phoneme mỗi từ trong target.
-    Không cần word boundary từ ASR — đây là limitation của wav2vec2 approach.
+    Không cần word boundary từ ASR — limitation của wav2vec2 approach.
+    Từ chức năng ngắn bị score<60: gán _REDUCED_SCORE để tránh badge 0 đỏ giả.
     """
     target_words = [w for w in target_text.lower().split() if any(c.isalpha() for c in w)]
     expected_per_word = [list(text_to_phonemes(w)) for w in target_words]
@@ -375,7 +414,8 @@ def analyze_per_word(target_text: str,
 
     if not actual_phonemes or total_exp == 0:
         return [WordAnalysisResult(word=w, heard=None,
-                                   word_ipa=text_to_ipa_str(w), score=0)
+                                   word_ipa=text_to_ipa_str(w),
+                                   score=_REDUCED_SCORE if _likely_reduced(w, len(list(text_to_phonemes(w))), 0) else 0)
                 for w in target_words]
 
     scale = len(actual_phonemes) / total_exp
@@ -388,14 +428,22 @@ def analyze_per_word(target_text: str,
         pos += n_actual
 
         word_ipa = text_to_ipa_str(word)
+
         if not word_actual:
+            # Hết phoneme ở cuối câu
+            score = _REDUCED_SCORE if _likely_reduced(word, len(exp_phones), 0) else 0
             results.append(WordAnalysisResult(word=word, heard=None,
-                                              word_ipa=word_ipa, score=0))
+                                              word_ipa=word_ipa, score=score))
             continue
 
         word_align = levenshtein_align(exp_phones, word_actual)
         _, _, score = score_alignment(word_align, len(exp_phones))
         heard_ipa = "".join(a for _, a in word_align if a)
+
+        # Từ chức năng ngắn với score thấp → likely connected speech reduction
+        if _likely_reduced(word, len(exp_phones), score):
+            score = _REDUCED_SCORE
+
         results.append(WordAnalysisResult(word=word, heard=heard_ipa or None,
                                           word_ipa=word_ipa, score=score))
 
@@ -480,6 +528,14 @@ async def analyze(
         ))
 
     accuracy, fluency, overall = score_alignment(alignment, len(expected_phonemes))
+    word_analyses = analyze_per_word(target_text, actual_phonemes)
+
+    # Divergence check: per-word avg vs sentence overall không nên lệch >25
+    if word_analyses:
+        avg_word = sum(w.score for w in word_analyses) / len(word_analyses)
+        delta = abs(overall - avg_word)
+        flag = " ⚠️  delta>25" if delta > 25 else ""
+        print(f"[score] sentence_overall={overall}  avg_word={avg_word:.0f}  delta={delta:.0f}{flag}")
 
     return AnalyzeResponse(
         target_ipa=t_ipa,
@@ -488,7 +544,7 @@ async def analyze(
         accuracy_score=accuracy,
         fluency_score=fluency,
         overall_score=overall,
-        word_analyses=analyze_per_word(target_text, actual_phonemes),
+        word_analyses=word_analyses,
     )
 
 
