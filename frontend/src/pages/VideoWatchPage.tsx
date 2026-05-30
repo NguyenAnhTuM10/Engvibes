@@ -4,13 +4,14 @@ import {
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, BookmarkPlus, Volume2, VolumeX,
-  RotateCcw, ChevronRight, ChevronLeft, CheckCircle2, Mic,
+  RotateCcw, ChevronRight, ChevronLeft, CheckCircle2, Mic, GraduationCap,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import CefrBadge from '@/components/ui/CefrBadge'
 import { useVideo, useVideoSubtitles } from '@/features/videos/api'
 import { useCreateOrGetSession, useVocabInfo, useAddVocabFromListen } from '@/features/session/api'
+import { useVocabDecks, useCreateVocabCard } from '@/features/vocab/sm2api'
 import type { SubtitleSegment, Vocab, WarmupWord } from '@/shared/types/api'
 import { toast } from 'sonner'
 
@@ -375,7 +376,7 @@ function SegmentText({
   onWordClick,
 }: {
   text: string
-  onWordClick: (word: string, e: React.MouseEvent<HTMLSpanElement>) => void
+  onWordClick: (word: string, sentence: string, e: React.MouseEvent<HTMLSpanElement>) => void
 }) {
   const parts = text.split(/(\s+)/)
   return (
@@ -386,7 +387,7 @@ function SegmentText({
         if (!clean) return <span key={i}>{part}</span>
         return (
           <span key={i}
-            onClick={(e) => onWordClick(clean.toLowerCase(), e)}
+            onClick={(e) => onWordClick(clean.toLowerCase(), text, e)}
             className="cursor-pointer hover:bg-yellow-200/60 dark:hover:bg-yellow-600/25 rounded px-0.5 -mx-0.5 transition-colors">
             {part}
           </span>
@@ -399,9 +400,10 @@ function SegmentText({
 // ── Vocab popover ─────────────────────────────────────────────────────────────
 
 function VocabCard({
-  word, warmupWord, vocab, isLoading, position, onSave, onClose, isSaving,
+  word, sentence, warmupWord, vocab, isLoading, position, onSave, onClose, isSaving,
 }: {
   word: string
+  sentence: string
   warmupWord: WarmupWord | undefined
   vocab: Vocab | undefined
   isLoading: boolean
@@ -414,6 +416,15 @@ function VocabCard({
   const ipa = vocab?.ipa ?? warmupWord?.ipa
   const pos = vocab?.partOfSpeech ?? warmupWord?.partOfSpeech
 
+  // SM-2 deck add
+  const { data: decks } = useVocabDecks()
+  const createCard = useCreateVocabCard()
+  const [deckId, setDeckId] = useState<string>('')
+
+  useEffect(() => {
+    if (!deckId && decks?.length) setDeckId(decks[0].id)
+  }, [decks, deckId])
+
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (!(e.target as Element).closest('[data-vocab-card]')) onClose()
@@ -422,22 +433,49 @@ function VocabCard({
     return () => document.removeEventListener('mousedown', handler)
   }, [onClose])
 
+  const speak = () =>
+    window.speechSynthesis.speak(
+      Object.assign(new SpeechSynthesisUtterance(word), { lang: 'en-US', rate: 0.85 }),
+    )
+
+  const handleAddToDeck = () => {
+    if (!deckId || !def) return
+    createCard.mutate(
+      { deckId, front: word, back: def, ipa: ipa || undefined, exampleSentence: sentence || undefined },
+      {
+        onSuccess: () => {
+          toast.success(`Added "${word}" to ${decks?.find((d) => d.id === deckId)?.name ?? 'deck'}`)
+          onClose()
+        },
+        onError: () => toast.error('Could not add to deck'),
+      },
+    )
+  }
+
   return (
     <div data-vocab-card
       className="fixed z-50 w-64 bg-background border rounded-xl shadow-xl p-4 space-y-2"
       style={{
         left: Math.min(position.x, window.innerWidth - 280),
-        top: Math.min(position.y + 8, window.innerHeight - 220),
+        top: Math.min(position.y + 8, window.innerHeight - 320),
       }}>
       <div className="flex items-start justify-between gap-2">
-        <div>
-          <p className="font-semibold capitalize">{word}</p>
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5">
+            <p className="font-semibold capitalize truncate">{word}</p>
+            <button onClick={speak} title="Pronounce"
+              className="text-muted-foreground hover:text-foreground shrink-0">
+              <Volume2 className="h-3.5 w-3.5" />
+            </button>
+          </div>
           {ipa && <p className="text-xs text-muted-foreground font-mono mt-0.5">{ipa}</p>}
           {pos && <p className="text-xs text-blue-600 dark:text-blue-400 capitalize">{pos}</p>}
         </div>
         <button onClick={onClose}
           className="text-muted-foreground hover:text-foreground text-xl leading-none shrink-0 -mt-0.5">×</button>
       </div>
+
+      {/* Nghĩa nhanh */}
       {isLoading ? (
         <div className="h-3 w-32 bg-muted rounded animate-pulse" />
       ) : def ? (
@@ -445,8 +483,36 @@ function VocabCard({
       ) : !warmupWord ? (
         <p className="text-xs text-muted-foreground italic">No definition found</p>
       ) : null}
+
+      {/* Thêm vào SM-2 deck */}
+      {def && (
+        <div className="space-y-1.5 pt-1 border-t">
+          {decks && decks.length > 0 ? (
+            <>
+              <select
+                value={deckId}
+                onChange={(e) => setDeckId(e.target.value)}
+                className="w-full text-xs rounded-md border bg-background px-2 py-1.5"
+              >
+                {decks.map((d) => (
+                  <option key={d.id} value={d.id}>{d.name}</option>
+                ))}
+              </select>
+              <Button size="sm" className="w-full gap-1.5"
+                onClick={handleAddToDeck} disabled={createCard.isPending || !deckId}>
+                <GraduationCap className="h-3.5 w-3.5" />
+                {createCard.isPending ? 'Adding…' : 'Add to Vocab Deck'}
+              </Button>
+            </>
+          ) : (
+            <p className="text-xs text-muted-foreground italic">No vocab deck yet — create one in Vocabulary.</p>
+          )}
+        </div>
+      )}
+
+      {/* Lưu vào flashcard (FSRS) — giữ chức năng cũ */}
       {vocab?.id && (
-        <Button size="sm" className="w-full gap-1.5 mt-1"
+        <Button size="sm" variant="outline" className="w-full gap-1.5"
           onClick={() => onSave(vocab.id)} disabled={isSaving}>
           <BookmarkPlus className="h-3.5 w-3.5" />
           {isSaving ? 'Saving…' : 'Save to Flashcards'}
@@ -473,6 +539,7 @@ export default function VideoWatchPage() {
 
   // Vocab popover
   const [selectedWord, setSelectedWord] = useState<string | null>(null)
+  const [selectedSentence, setSelectedSentence] = useState<string>('')
   const [popoverPos, setPopoverPos] = useState<{ x: number; y: number } | null>(null)
   const [sessionId, setSessionId] = useState<string | null>(null)
   const createSession = useCreateOrGetSession()
@@ -506,9 +573,10 @@ export default function VideoWatchPage() {
     }
   }, [activeIdx, dictationMode])
 
-  const handleWordClick = useCallback((word: string, e: React.MouseEvent<HTMLSpanElement>) => {
+  const handleWordClick = useCallback((word: string, sentence: string, e: React.MouseEvent<HTMLSpanElement>) => {
     const rect = (e.target as HTMLElement).getBoundingClientRect()
     setPopoverPos({ x: rect.left, y: rect.bottom })
+    setSelectedSentence(sentence)
     setSelectedWord(word)
   }, [])
 
@@ -696,6 +764,7 @@ export default function VideoWatchPage() {
       {selectedWord && popoverPos && (
         <VocabCard
           word={selectedWord}
+          sentence={selectedSentence}
           warmupWord={warmupWord}
           vocab={vocabInfo}
           isLoading={vocabLoading}

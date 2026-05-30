@@ -73,7 +73,7 @@ function SessionHistory() {
           <div
             key={session.id}
             className="flex items-center gap-4 px-4 py-3 hover:bg-accent/50 transition-colors cursor-pointer"
-            onClick={() => navigate(`/session/${session.videoId}`)}
+            onClick={() => navigate(`/watch/${session.videoId}`)}
           >
             <div className="shrink-0">
               {session.status === 'COMPLETED'

@@ -28,6 +28,20 @@ export function useVocabCards(deckId: string | undefined) {
   })
 }
 
+// Thêm 1 thẻ vào deck (dùng khi click từ trong transcript video).
+export function useCreateVocabCard() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (data: {
+      deckId: string; front: string; back: string; ipa?: string; exampleSentence?: string
+    }) => api.post<Sm2Card>(`${BASE}/cards`, data).then(r => r.data),
+    onSuccess: (_card, vars) => {
+      qc.invalidateQueries({ queryKey: ['vocab-cards', vars.deckId] })
+      qc.invalidateQueries({ queryKey: ['vocab-queue', vars.deckId] })
+    },
+  })
+}
+
 export function useReviewQueue(deckId: string | undefined, limit = 50) {
   return useQuery({
     queryKey: ['vocab-queue', deckId],
