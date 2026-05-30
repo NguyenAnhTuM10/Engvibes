@@ -27,8 +27,9 @@ CONTENT = (Path(__file__).resolve().parent.parent
            / "backend" / "src" / "main" / "resources"
            / "data" / "pronunciation_content.json")
 
-WORD_FIELDS = ("text", "targetSound", "ipa", "exampleSentence", "group")
-SENT_FIELDS = ("text", "level", "targetSound", "category")
+# Required (non-blank) fields. minimalPair là optional (có thể null cho âm không có cặp).
+WORD_FIELDS = ("text", "targetSound", "ipa", "exampleSentence", "group", "vi", "commonError", "tip")
+SENT_FIELDS = ("text", "level", "category", "vi", "tip")
 
 
 def phonemes_in_inventory(ipa: str) -> tuple[list[str], list[str]]:
@@ -78,7 +79,7 @@ def main() -> int:
     # ── Sentences ────────────────────────────────────────────────────────
     for i, s in enumerate(sentences):
         tag = f"sentence[{i}] ({s.get('category', '?')})"
-        missing = [f for f in ("text", "level", "category") if not str(s.get(f, "")).strip()]
+        missing = [f for f in SENT_FIELDS if not str(s.get(f, "")).strip()]
         if missing:
             errors.append(f"{tag}: thiếu field {missing}")
         if s.get("level") not in ("B1", "B2", "C1"):

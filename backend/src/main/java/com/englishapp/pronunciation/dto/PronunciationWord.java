@@ -8,11 +8,19 @@ package com.englishapp.pronunciation.dto;
  * @param ipa             IPA đầy đủ của từ (vd "θɪŋk")
  * @param exampleSentence câu ví dụ chứa từ
  * @param group           nhóm âm (vd "Final Consonants")
+ * @param vi              nghĩa tiếng Việt
+ * @param commonError     lỗi người Việt hay mắc với từ/âm này
+ * @param minimalPair     từ tương phản tối thiểu (vd "sink" cho "think") — có thể null
+ * @param tip             gợi ý sửa lỗi ngắn (tiếng Việt)
  */
 public record PronunciationWord(
         String text,
         String targetSound,
         String ipa,
         String exampleSentence,
-        String group
+        String group,
+        String vi,
+        String commonError,
+        String minimalPair,
+        String tip
 ) {}

@@ -24,7 +24,10 @@ Toàn bộ words + sentences nằm trong **một file tĩnh**:
 `backend/src/main/resources/data/pronunciation_content.json`
 — backend load 1 lần lúc startup (`PronunciationContentService`), **không gọi
 LLM lúc runtime**. Mỗi word có `text`, `targetSound` (IPA âm trọng tâm), `ipa`
-(IPA đầy đủ), `exampleSentence`, `group`.
+(IPA đầy đủ), `exampleSentence`, `group`, cùng các field làm giàu: `vi` (nghĩa
+tiếng Việt), `commonError` (lỗi người Việt hay mắc), `minimalPair` (từ tương phản,
+có thể null), `tip` (gợi ý sửa lỗi). Mỗi sentence có thêm `vi` (bản dịch) + `tip`.
+Field `vi` cũng được card SRS "Sounds to practice" tái dùng làm mặt sau.
 
 Endpoint phục vụ (JWT):
 
@@ -83,7 +86,8 @@ Kiểm tra: mọi word đủ field; `ipa` parse được; mọi phoneme của `i
 `targetSound` nằm trong inventory; in bảng đếm coverage mỗi nhóm. Exit code ≠ 0
 nếu có lỗi.
 
-Hiện tại: **67 words / 9 nhóm**, **40 sentences / 8 category** — tất cả hợp lệ.
+Hiện tại: **117 words / 9 nhóm**, **64 sentences / 8 category** — tất cả hợp lệ
+(validator còn kiểm `vi`/`commonError`/`tip` không rỗng; `minimalPair` optional).
 
 > Windows: `python` console mặc định cp1258 sẽ làm hỏng hiển thị IPA khi pipe.
 > Đặt `PYTHONIOENCODING=utf-8` trước khi pipe ra tool khác. Bản thân service và

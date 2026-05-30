@@ -144,8 +144,11 @@ public class SoundsToPracticeService {
         String ipa = content.map(PronunciationWord::ipa)
                 .or(() -> vocab.map(VocabEntry::getIpa))
                 .orElse(wa.wordIpa());
-        String back = vocab.map(VocabEntry::getDefinition)
+        // back ưu tiên nghĩa tiếng Việt curated trong content, rồi vocab definition,
+        // cuối cùng fallback mô tả âm cần luyện.
+        String back = content.map(PronunciationWord::vi)
                 .filter(s -> s != null && !s.isBlank())
+                .or(() -> vocab.map(VocabEntry::getDefinition).filter(s -> s != null && !s.isBlank()))
                 .or(() -> content.map(c -> "Luyện âm /" + c.targetSound() + "/"))
                 .orElse("Luyện phát âm từ này");
         String example = content.map(PronunciationWord::exampleSentence).orElse(null);

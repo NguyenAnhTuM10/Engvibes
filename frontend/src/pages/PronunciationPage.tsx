@@ -321,25 +321,39 @@ export default function PronunciationPage() {
                   />
                 )}
 
-                {/* Câu ví dụ / âm trọng tâm cho từ */}
+                {/* Chi tiết làm giàu cho từ: nghĩa, âm trọng tâm, cặp tương phản, lỗi, tip */}
                 {mode === 'word' && activeWordEntry && (
-                  <div className="space-y-1 pt-1">
-                    <p className="text-sm text-muted-foreground">
-                      Focus sound:{' '}
+                  <div className="space-y-1.5 pt-1 text-sm text-left max-w-md mx-auto">
+                    <p className="text-center text-muted-foreground">
+                      <span className="text-foreground font-medium">{activeWordEntry.vi}</span>
+                      {' · '}Focus{' '}
                       <span className="font-mono text-foreground">/{activeWordEntry.targetSound}/</span>
+                      {activeWordEntry.minimalPair && (
+                        <>{' · '}≠{' '}
+                          <span className="font-mono text-foreground">{activeWordEntry.minimalPair}</span>
+                        </>
+                      )}
                     </p>
-                    <p className="text-sm italic text-muted-foreground">
+                    <p className="italic text-muted-foreground text-center">
                       "{activeWordEntry.exampleSentence}"
                     </p>
+                    <p className="text-amber-600 dark:text-amber-400">⚠ {activeWordEntry.commonError}</p>
+                    <p className="text-muted-foreground">💡 {activeWordEntry.tip}</p>
                   </div>
                 )}
 
-                {/* Âm trọng tâm cho câu drill */}
-                {mode === 'sentence' && activeSentEntry?.targetSound && (
-                  <p className="text-sm text-muted-foreground pt-1">
-                    Focus sound:{' '}
-                    <span className="font-mono text-foreground">/{activeSentEntry.targetSound}/</span>
-                  </p>
+                {/* Chi tiết cho câu: âm trọng tâm, bản dịch, tip */}
+                {mode === 'sentence' && activeSentEntry && (
+                  <div className="space-y-1 pt-1 text-sm max-w-md mx-auto">
+                    {activeSentEntry.targetSound && (
+                      <p className="text-center text-muted-foreground">
+                        Focus{' '}
+                        <span className="font-mono text-foreground">/{activeSentEntry.targetSound}/</span>
+                      </p>
+                    )}
+                    <p className="italic text-muted-foreground text-center">{activeSentEntry.vi}</p>
+                    <p className="text-muted-foreground">💡 {activeSentEntry.tip}</p>
+                  </div>
                 )}
               </div>
 

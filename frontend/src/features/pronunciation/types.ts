@@ -5,6 +5,10 @@ export interface PronunciationWord {
   ipa: string                // IPA đầy đủ của từ, vd "θɪŋk"
   exampleSentence: string
   group: string              // nhóm âm, vd "Final Consonants"
+  vi: string                 // nghĩa tiếng Việt
+  commonError: string        // lỗi người Việt hay mắc
+  minimalPair: string | null // từ tương phản tối thiểu (vd "sink")
+  tip: string                // gợi ý sửa lỗi ngắn
 }
 
 export interface PronunciationSentence {
@@ -12,6 +16,8 @@ export interface PronunciationSentence {
   level: 'B1' | 'B2' | 'C1'
   targetSound: string | null // âm trọng tâm của drill, null nếu không nhắm 1 âm
   category: string
+  vi: string                 // bản dịch tiếng Việt
+  tip: string                // ghi chú trọng tâm luyện
 }
 
 export interface WordAnalysis {
