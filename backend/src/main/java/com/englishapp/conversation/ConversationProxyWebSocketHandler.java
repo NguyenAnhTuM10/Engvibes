@@ -375,6 +375,8 @@ public class ConversationProxyWebSocketHandler extends AbstractWebSocketHandler 
     private void sendServerSessionUpdate(WebSocket openAiWs, ConversationScenario scenario) {
         try {
             var session = objectMapper.createObjectNode();
+            // GA Realtime API yêu cầu session.type trong MỌI session.update.
+            session.put("type", "realtime");
             session.put("instructions", scenario.buildRealtimeInstructions());
             session.set("audio", objectMapper.createObjectNode()
                     .set("output", objectMapper.createObjectNode().put("voice", realtimeVoice)));
