@@ -1,3 +1,33 @@
+// Nội dung tĩnh phục vụ từ backend (data/pronunciation_content.json)
+export interface PronunciationWord {
+  text: string
+  targetSound: string        // âm trọng tâm IPA, vd "θ"
+  ipa: string                // IPA đầy đủ của từ, vd "θɪŋk"
+  exampleSentence: string
+  group: string              // nhóm âm, vd "Final Consonants"
+  vi: string                 // nghĩa tiếng Việt
+  commonError: string        // lỗi người Việt hay mắc
+  minimalPair: string | null // từ tương phản tối thiểu (vd "sink")
+  tip: string                // gợi ý sửa lỗi ngắn
+}
+
+export interface PronunciationSentence {
+  text: string
+  level: 'B1' | 'B2' | 'C1'
+  targetSound: string | null // âm trọng tâm của drill, null nếu không nhắm 1 âm
+  category: string
+  vi: string                 // bản dịch tiếng Việt
+  tip: string                // ghi chú trọng tâm luyện
+}
+
+// Video (đã publish + có phụ đề) làm nguồn câu luyện phát âm
+export interface VideoSentenceSource {
+  id: string
+  title: string
+  cefrLevel: string | null
+  sentenceCount: number
+}
+
 export interface WordAnalysis {
   word: string
   heard: string | null
@@ -13,6 +43,17 @@ export interface PhonemeMatch {
   tip: string | null        // gợi ý sửa lỗi
 }
 
+// Thay đổi trên deck SRS "Sounds to practice" sau 1 lần phát âm
+export interface SoundCardChange {
+  cardId: string
+  word: string
+  action: 'ADDED' | 'DEMOTED' | 'PROMOTED'
+  ipa: string | null
+  score: number
+  intervalDays: number | null
+  dueDate: string | null
+}
+
 export interface AttemptResult {
   attemptId: string
   attemptNumber: number
@@ -24,6 +65,7 @@ export interface AttemptResult {
   fluencyScore: number
   phonemeMatches: PhonemeMatch[]
   wordAnalyses: WordAnalysis[] | null
+  soundCardChanges: SoundCardChange[] | null  // tự đẩy từ yếu vào SRS
   createdAt: string
 }
 

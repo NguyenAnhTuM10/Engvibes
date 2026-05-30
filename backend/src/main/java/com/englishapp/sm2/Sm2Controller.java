@@ -19,6 +19,7 @@ public class Sm2Controller {
 
     private final Sm2Service    service;
     private final ImportService importService;
+    private final SoundsToPracticeService soundsToPractice;
 
     // ── Decks ───────────────────────────────────────────────────────────────
 
@@ -26,6 +27,17 @@ public class Sm2Controller {
     @ResponseStatus(HttpStatus.CREATED)
     public ApiResponse<Sm2Deck> createDeck(@RequestBody DeckRequest req) {
         return ApiResponse.ok(service.createDeck(req));
+    }
+
+    /**
+     * GET /api/sm2/decks/sounds-to-practice
+     * Deck hệ thống chứa các từ/âm phát âm yếu (tự tạo nếu chưa có).
+     * Trả deck + cards như deck thường.
+     */
+    @GetMapping("/decks/sounds-to-practice")
+    public ApiResponse<SoundsDeckResponse> soundsToPracticeDeck() {
+        Sm2Deck deck = soundsToPractice.getOrCreateDeck();
+        return ApiResponse.ok(new SoundsDeckResponse(deck, soundsToPractice.listCards()));
     }
 
     @GetMapping("/decks")

@@ -2,6 +2,9 @@ package com.englishapp.pronunciation;
 
 import com.englishapp.common.ApiException;
 import com.englishapp.pronunciation.dto.*;
+import com.englishapp.sm2.SoundsToPracticeService;
+import com.englishapp.sm2.dto.SoundCardChange;
+import com.englishapp.video.subtitle.SubtitleRepository;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -9,7 +12,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 
@@ -21,6 +23,20 @@ public class PronunciationService {
     private final PronunciationSessionRepository sessionRepo;
     private final PronunciationAttemptRepository attemptRepo;
     private final ObjectMapper objectMapper;
+    private final SoundsToPracticeService soundsToPractice;
+    private final SubtitleRepository subtitleRepo;
+
+    /** Video đã PUBLISHED và có phụ đề — nguồn câu luyện phát âm (picker "From Video"). */
+    @Transactional(readOnly = true)
+    public List<com.englishapp.pronunciation.dto.VideoSentenceSource> getVideoSentenceSources() {
+        return subtitleRepo.findPublishedVideosWithSubtitles().stream()
+                .map(row -> new com.englishapp.pronunciation.dto.VideoSentenceSource(
+                        UUID.fromString(row[0].toString()),
+                        row[1] == null ? "" : row[1].toString(),
+                        row[2] == null ? null : row[2].toString(),
+                        row[3] == null ? 0 : ((Number) row[3]).intValue()))
+                .toList();
+    }
 
     // ── Sessions ─────────────────────────────────────────────────────────
 
@@ -95,7 +111,11 @@ public class PronunciationService {
             }
         }
 
-        return toAttemptResponse(attempt, result);
+        // Vòng khép kín Pronunciation → SRS: từ yếu vào deck "Sounds to practice",
+        // phát âm đúng = 1 lần review SM-2 thành công. (cùng transaction)
+        List<SoundCardChange> soundChanges = soundsToPractice.linkAttempt(result);
+
+        return toAttemptResponse(attempt, result, soundChanges);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────
@@ -119,10 +139,11 @@ public class PronunciationService {
                 a.getOverallScore() != null ? a.getOverallScore() : 0,
                 a.getAccuracyScore() != null ? a.getAccuracyScore() : 0,
                 a.getFluencyScore() != null ? a.getFluencyScore() : 0,
-                phonemes, null, a.getCreatedAt());
+                phonemes, null, null, a.getCreatedAt());
     }
 
-    private AttemptResponse toAttemptResponse(PronunciationAttempt a, AnalyzeResult result) {
+    private AttemptResponse toAttemptResponse(PronunciationAttempt a, AnalyzeResult result,
+                                              List<SoundCardChange> soundChanges) {
         List<PhonemeMatch> phonemes = result.phonemeMatches() != null
                 ? result.phonemeMatches().stream()
                     .map(m -> new PhonemeMatch(m.position(), m.expected(), m.actual(), m.matched(), m.tip()))
@@ -131,7 +152,7 @@ public class PronunciationService {
         return new AttemptResponse(a.getId(), a.getAttemptNumber(), a.getTranscript(),
                 result.targetIpa(), result.actualIpa(),
                 result.overallScore(), result.accuracyScore(), result.fluencyScore(),
-                phonemes, result.wordAnalyses(), a.getCreatedAt());
+                phonemes, result.wordAnalyses(), soundChanges, a.getCreatedAt());
     }
 
     private String serializePhonemeMatches(AnalyzeResult result) {
