@@ -1,6 +1,6 @@
 # English Learning Platform — Backend
 
-Spring Boot 3.3 / Java 21 / Gradle · REST API for a 7-step AI-powered listening and speaking learning app.
+Spring Boot 3.3 / Java 21 / Maven · REST API for a 7-step AI-powered listening and speaking learning app.
 
 ## Architecture
 
@@ -11,7 +11,10 @@ com.englishapp/
 ├── common/         ApiResponse<T>, ApiException, GlobalExceptionHandler
 ├── user/           Auth (register/login) + profile
 ├── vocab/          VocabEntry seed (Oxford 5000 CSV)
-├── flashcard/      Decks + UserCard + FSRS-4.5 scheduler
+├── flashcard/      Decks, dictionary + custom cards, FSRS-4.5 scheduler, bulk import
+├── game/           Vocabulary games (multiple choice, matching, typing recall)
+├── conversation/   Realtime voice WebSocket proxy (OpenAI Realtime API)
+├── pronunciation/  Async pronunciation pipeline (Whisper → Python service → WebSocket)
 ├── video/          Upload, FFmpeg pipeline, Admin management
 ├── storage/        S3/MinIO abstraction
 ├── ai/             WhisperClient, LlmClient, NlpService, AIOrchestrationService
@@ -30,17 +33,18 @@ com.englishapp/
 
 ## Running Locally
 
-**Prerequisites:** Docker Desktop, Java 21, Gradle
+**Prerequisites:** Docker Desktop, Java 21 (Maven comes with the `mvnw` wrapper)
 
 ```powershell
 # 1. Start infrastructure (Postgres:5433, Redis:6379, MinIO:9000)
 docker compose up -d
 
 # 2. Build
-.\gradlew.bat build -x test
+.\mvnw.cmd package -DskipTests
 
 # 3. Run (dev)
-java -jar build\libs\backend-0.0.1-SNAPSHOT.jar --spring.profiles.active=local
+java -jar target\backend-0.0.1-SNAPSHOT.jar --spring.profiles.active=local
+# or: .\mvnw.cmd spring-boot:run "-Dspring-boot.run.profiles=local"
 
 # 4. Verify
 # http://localhost:8080/api/health
@@ -66,12 +70,18 @@ app:
 
 ## Running Demo Profile
 
-Seeds 40 videos, 13 users, 25 sessions, 100 cards, phoneme stats for the demo user.
+Seeds 40 videos, 13 users, 25 sessions, 100 dictionary cards, a 15-card custom deck ("Daily English") and phoneme stats for the demo user.
 
 ```powershell
-java -jar build\libs\backend-0.0.1-SNAPSHOT.jar --spring.profiles.active=local,demo
+java -jar target\backend-0.0.1-SNAPSHOT.jar --spring.profiles.active=local,demo
 # Login: demo@englishapp.com / demo123
 # Admin:  admin1@englishapp.com / admin123
+```
+
+## Tests
+
+```powershell
+.\mvnw.cmd verify   # unit tests + Testcontainers integration tests (needs Docker running)
 ```
 
 ## API Documentation
@@ -97,6 +107,9 @@ OpenAPI JSON: `http://localhost:8080/v3/api-docs`
 | Step 7 - Quick Review | `/api/sessions/{id}/quick-review` |
 | Flashcard Decks | `/api/decks` |
 | Flashcard Cards | `/api/cards` |
+| Vocabulary Games | `/api/games` |
+| Conversation | `/api/conversation` + WebSocket `/ws/conversation` |
+| Pronunciation | `/api/pronunciation` |
 | Recommendations | `/api/recommend` |
 | Analytics | `/api/stats` |
 | Event Tracking | `/api/events` |
