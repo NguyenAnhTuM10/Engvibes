@@ -1,8 +1,8 @@
-package com.englishapp.sm2;
+package com.englishapp.flashcard;
 
 import com.englishapp.common.ApiException;
-import com.englishapp.sm2.dto.ImportSummary;
-import com.englishapp.sm2.dto.ImportSummary.ImportError;
+import com.englishapp.flashcard.dto.ImportSummary;
+import com.englishapp.flashcard.dto.ImportSummary.ImportError;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -15,21 +15,25 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
-import java.time.Instant;
 import java.util.*;
-import java.util.stream.Collectors;
+import java.util.regex.Pattern;
 
+/**
+ * Import hàng loạt card tự tạo vào deck của user từ 3 định dạng:
+ * text dán kiểu Quizlet, CSV, JSON. Card trùng mặt trước (không phân biệt hoa thường)
+ * với card đã có trong deck — kể cả card từ điển — sẽ bị bỏ qua.
+ * Card import đến hạn ôn ngay (FSRS state NEW).
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class ImportService {
+public class CardImportService {
 
-    private static final int MAX_CARDS = 1000;
+    static final int MAX_CARDS = 1000;
 
-    private final Sm2DeckRepository   deckRepo;
-    private final Sm2CardRepository   cardRepo;
-    private final Sm2ReviewRepository reviewRepo;
-    private final ObjectMapper         objectMapper;
+    private final DeckService    deckService;
+    private final CardRepository cardRepository;
+    private final ObjectMapper   objectMapper;
 
     // ─────────────────────────────────────────────────────────────────────
     // Public API
@@ -40,22 +44,22 @@ public class ImportService {
      * Mỗi "card" được phân cách bởi cardSep; front|back|ipa?|example? bởi termSep.
      */
     @Transactional
-    public ImportSummary importText(UUID deckId, String content,
+    public ImportSummary importText(UUID deckId, UUID userId, String content,
                                     String termSep, String cardSep) {
-        requireDeckExists(deckId);
+        deckService.requireOwnedDeck(deckId, userId);
         if (content == null || content.isBlank()) {
             return new ImportSummary(0, 0, List.of());
         }
 
         // Chuẩn hoá line endings trước khi tách
         String normalised = content.replace("\r\n", "\n").replace("\r", "\n");
-        // Nếu cardSep là "\n" (escaped string từ JSON) thì unescape
-        String sep = unescape(cardSep);
+        // Nếu separator là "\n" / "\t" (escaped string từ JSON) thì unescape
+        String sep  = unescape(cardSep);
         String tsep = unescape(termSep);
 
-        String[] rawLines = normalised.split(java.util.regex.Pattern.quote(sep), -1);
+        String[] rawLines = normalised.split(Pattern.quote(sep), -1);
 
-        List<ParsedCard> parsed = new ArrayList<>();
+        List<ParsedCard>  parsed = new ArrayList<>();
         List<ImportError> errors = new ArrayList<>();
 
         for (int i = 0; i < rawLines.length; i++) {
@@ -63,7 +67,7 @@ public class ImportService {
             String line = rawLines[i].trim();
             if (line.isEmpty()) continue;
 
-            String[] cols = line.split(java.util.regex.Pattern.quote(tsep), -1);
+            String[] cols = line.split(Pattern.quote(tsep), -1);
             String front = cols.length > 0 ? cols[0].trim() : "";
             String back  = cols.length > 1 ? cols[1].trim() : "";
             String ipa   = cols.length > 2 ? cols[2].trim() : null;
@@ -72,11 +76,10 @@ public class ImportService {
             ImportError err = validate(lineNum, front, back);
             if (err != null) { errors.add(err); continue; }
 
-            parsed.add(new ParsedCard(lineNum, front, back,
-                    emptyToNull(ipa), emptyToNull(ex)));
+            parsed.add(new ParsedCard(lineNum, front, back, emptyToNull(ipa), emptyToNull(ex)));
         }
 
-        return persist(deckId, parsed, errors);
+        return persist(deckId, userId, parsed, errors);
     }
 
     /**
@@ -85,10 +88,10 @@ public class ImportService {
      * Hỗ trợ double-quoted fields.
      */
     @Transactional
-    public ImportSummary importCsv(UUID deckId, InputStream in) throws IOException {
-        requireDeckExists(deckId);
+    public ImportSummary importCsv(UUID deckId, UUID userId, InputStream in) throws IOException {
+        deckService.requireOwnedDeck(deckId, userId);
 
-        List<List<String>> rows = parseCsv(in);
+        List<List<String>> rows   = parseCsv(in);
         List<ParsedCard>   parsed = new ArrayList<>();
         List<ImportError>  errors = new ArrayList<>();
 
@@ -109,24 +112,22 @@ public class ImportService {
             ImportError err = validate(lineNum, front, back);
             if (err != null) { errors.add(err); continue; }
 
-            parsed.add(new ParsedCard(lineNum, front, back,
-                    emptyToNull(ipa), emptyToNull(ex)));
+            parsed.add(new ParsedCard(lineNum, front, back, emptyToNull(ipa), emptyToNull(ex)));
         }
 
-        return persist(deckId, parsed, errors);
+        return persist(deckId, userId, parsed, errors);
     }
 
     /**
      * Import từ JSON array: [{front, back, ipa?, exampleSentence?}].
      */
     @Transactional
-    public ImportSummary importJson(UUID deckId, InputStream in) throws IOException {
-        requireDeckExists(deckId);
+    public ImportSummary importJson(UUID deckId, UUID userId, InputStream in) throws IOException {
+        deckService.requireOwnedDeck(deckId, userId);
 
         List<Map<String, Object>> items;
         try {
-            items = objectMapper.readValue(in,
-                    new TypeReference<List<Map<String, Object>>>() {});
+            items = objectMapper.readValue(in, new TypeReference<List<Map<String, Object>>>() {});
         } catch (Exception e) {
             throw ApiException.badRequest("Invalid JSON: expected a JSON array of objects. " + e.getMessage());
         }
@@ -145,65 +146,54 @@ public class ImportService {
             ImportError err = validate(lineNum, front, back);
             if (err != null) { errors.add(err); continue; }
 
-            parsed.add(new ParsedCard(lineNum, front, back,
-                    emptyToNull(ipa), emptyToNull(ex)));
+            parsed.add(new ParsedCard(lineNum, front, back, emptyToNull(ipa), emptyToNull(ex)));
         }
 
-        return persist(deckId, parsed, errors);
+        return persist(deckId, userId, parsed, errors);
     }
 
     // ─────────────────────────────────────────────────────────────────────
     // Shared persistence logic
     // ─────────────────────────────────────────────────────────────────────
 
-    private ImportSummary persist(UUID deckId,
-                                   List<ParsedCard> parsed,
-                                   List<ImportError> errors) {
+    private ImportSummary persist(UUID deckId, UUID userId,
+                                  List<ParsedCard> parsed, List<ImportError> errors) {
         int total = parsed.size();
         if (total > MAX_CARDS) {
             throw ApiException.badRequest(
                     "Import limit exceeded: max " + MAX_CARDS + " cards, got " + total);
         }
 
-        // Existing fronts (case-insensitive dedup)
-        Set<String> existingFronts = cardRepo.findByDeckId(deckId).stream()
-                .map(c -> c.getFront().toLowerCase().trim())
-                .collect(Collectors.toSet());
+        // Mặt trước đã có trong deck (card từ điển + card tự tạo), so sánh không phân biệt hoa thường
+        Set<String> existingFronts = new HashSet<>(cardRepository.findFrontsLowerInDeck(deckId));
 
-        List<Sm2Card> toSave = new ArrayList<>();
+        List<UserCard> toSave = new ArrayList<>();
         int skipped = 0;
 
         for (ParsedCard p : parsed) {
-            if (existingFronts.contains(p.front().toLowerCase())) {
+            // add() trả false nếu đã có → vừa chống trùng với DB vừa chống trùng trong cùng batch
+            if (!existingFronts.add(p.front().toLowerCase())) {
                 skipped++;
                 log.debug("[import] skip dup line={} front='{}'", p.line(), p.front());
                 continue;
             }
-            existingFronts.add(p.front().toLowerCase());    // prevent dup within batch
-            toSave.add(Sm2Card.builder()
+            toSave.add(UserCard.builder()
+                    .userId(userId)
                     .deckId(deckId)
                     .front(p.front())
                     .back(p.back())
                     .ipa(p.ipa())
-                    .exampleSentence(p.exampleSentence())
+                    .contextSentence(p.exampleSentence())
+                    .sourceType(CardSource.IMPORT)
                     .build());
         }
 
-        List<Sm2Card> saved = cardRepo.saveAll(toSave);
-
-        // Tạo Review với default SRS (ease=2.5, interval=0, due=now) → vào queue ngay
-        List<Sm2Review> reviews = saved.stream()
-                .map(c -> Sm2Review.builder()
-                        .cardId(c.getId())
-                        .dueDate(Instant.now())  // due immediately = in queue
-                        .build())
-                .toList();
-        reviewRepo.saveAll(reviews);
+        cardRepository.saveAll(toSave);
 
         log.info("[import] deck={} imported={} skipped={} errors={}",
-                deckId, saved.size(), skipped, errors.size());
+                deckId, toSave.size(), skipped, errors.size());
 
-        return new ImportSummary(saved.size(), skipped, errors);
+        return new ImportSummary(toSave.size(), skipped, errors);
     }
 
     // ─────────────────────────────────────────────────────────────────────
@@ -219,7 +209,7 @@ public class ImportService {
             while ((line = reader.readLine()) != null) {
                 if (first) {
                     // Strip UTF-8 BOM (EF BB BF) added by Windows/Excel editors
-                    line = line.startsWith("﻿") ? line.substring(1) : line;
+                    if (line.startsWith("﻿")) line = line.substring(1);
                     first = false;
                 }
                 line = line.trim();
@@ -231,7 +221,7 @@ public class ImportService {
     }
 
     /** RFC-4180 compliant CSV line parser với double-quote support. */
-    private List<String> parseCsvLine(String line) {
+    static List<String> parseCsvLine(String line) {
         List<String> fields = new ArrayList<>();
         StringBuilder current = new StringBuilder();
         boolean inQuotes = false;
@@ -260,12 +250,6 @@ public class ImportService {
     // Helpers
     // ─────────────────────────────────────────────────────────────────────
 
-    private void requireDeckExists(UUID deckId) {
-        if (!deckRepo.existsById(deckId)) {
-            throw ApiException.notFound("Deck not found: " + deckId);
-        }
-    }
-
     private ImportError validate(int line, String front, String back) {
         if (front == null || front.isBlank()) {
             return new ImportError(line, "missing 'front' field");
@@ -293,5 +277,5 @@ public class ImportService {
 
     /** Intermediate parsed card before dedup/persist. */
     private record ParsedCard(int line, String front, String back,
-                               String ipa, String exampleSentence) {}
+                              String ipa, String exampleSentence) {}
 }

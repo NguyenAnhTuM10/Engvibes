@@ -1,4 +1,4 @@
-package com.englishapp.sm2.dto;
+package com.englishapp.flashcard.dto;
 
 import java.util.List;
 

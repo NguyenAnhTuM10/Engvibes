@@ -39,14 +39,14 @@ public class DeckService {
     }
 
     public DeckResponse updateDeck(UUID deckId, UpdateDeckRequest request, UUID userId) {
-        FlashcardDeck deck = findOwned(deckId, userId);
+        FlashcardDeck deck = requireOwnedDeck(deckId, userId);
         if (request.getName() != null) deck.setName(request.getName());
         if (request.getColor() != null) deck.setColor(request.getColor());
         return toResponse(deckRepository.save(deck));
     }
 
     public void deleteDeck(UUID deckId, UUID userId) {
-        FlashcardDeck deck = findOwned(deckId, userId);
+        FlashcardDeck deck = requireOwnedDeck(deckId, userId);
         if (deck.isDefault()) {
             throw ApiException.badRequest("Cannot delete the default deck");
         }
@@ -66,7 +66,8 @@ public class DeckService {
                 });
     }
 
-    private FlashcardDeck findOwned(UUID deckId, UUID userId) {
+    /** Trả deck nếu thuộc về user; 404 nếu không tồn tại / đã xoá, 403 nếu của người khác. */
+    public FlashcardDeck requireOwnedDeck(UUID deckId, UUID userId) {
         FlashcardDeck deck = deckRepository.findById(deckId)
                 .orElseThrow(() -> ApiException.notFound("Deck not found"));
         if (!deck.getUserId().equals(userId)) {
@@ -83,7 +84,7 @@ public class DeckService {
                 .color(deck.getColor())
                 .isDefault(deck.isDefault())
                 .cardCount(cardRepository.countByDeckId(deck.getId()))
-                .dueCount(cardRepository.countByDeckIdAndNextReviewBefore(deck.getId(), now))
+                .dueCount(cardRepository.countByDeckIdAndNextReviewLessThanEqual(deck.getId(), now))
                 .build();
     }
 }

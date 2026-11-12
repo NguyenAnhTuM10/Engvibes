@@ -9,5 +9,9 @@ import org.mapstruct.Mapping;
 public interface FlashcardMapper {
 
     @Mapping(source = "vocab", target = "vocab")
+    @Mapping(target = "front", expression = "java(card.resolvedFront())")
+    @Mapping(target = "back", expression = "java(card.resolvedBack())")
+    @Mapping(target = "ipa", expression = "java(card.resolvedIpa())")
+    @Mapping(target = "custom", expression = "java(card.isCustom())")
     CardResponse toCardResponse(UserCard card);
 }

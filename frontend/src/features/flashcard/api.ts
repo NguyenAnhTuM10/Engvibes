@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import api from '@/shared/api/client'
-import type { ApiResponse, Card, CardSource, Deck, Page } from '@/shared/types/api'
+import type { ApiResponse, Card, CardSource, Deck, ImportSummary, Page } from '@/shared/types/api'
 
 export const useDecks = () =>
   useQuery({
@@ -71,16 +71,22 @@ export const useDueCards = (deckId: string) =>
     enabled: !!deckId,
   })
 
+/** Dictionary card (`vocabId`) or custom card (`front` + `back`). */
+export type AddCardInput = {
+  deckId?: string
+  contextSentence?: string
+  sourceVideoId?: string
+  sourceType?: CardSource
+} & (
+  | { vocabId: string }
+  | { front: string; back: string; ipa?: string }
+)
+
 export const useAddCard = () => {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (data: {
-      vocabId: string
-      deckId?: string
-      contextSentence?: string
-      sourceVideoId?: string
-      sourceType?: CardSource
-    }) => api.post<never, ApiResponse<Card>>('/api/cards', data).then((r) => r.data),
+    mutationFn: (data: AddCardInput) =>
+      api.post<never, ApiResponse<Card>>('/api/cards', data).then((r) => r.data),
     onSuccess: (_, vars) => {
       qc.invalidateQueries({ queryKey: ['decks'] })
       if (vars.deckId) qc.invalidateQueries({ queryKey: ['decks', vars.deckId, 'cards'] })
@@ -108,6 +114,42 @@ export const useDeleteCard = () => {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['decks'] })
       toast.success('Card removed')
+    },
+    onError: (err: Error) => toast.error(err.message),
+  })
+}
+
+// ── Bulk import (custom cards) ───────────────────────────────────────────────
+
+const postImportFile = (deckId: string, kind: 'csv' | 'json', file: File) => {
+  const form = new FormData()
+  form.append('file', file)
+  return api
+    .post<never, ApiResponse<ImportSummary>>(`/api/decks/${deckId}/import/${kind}`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+    .then((r) => r.data)
+}
+
+export const useImportCards = (deckId: string) => {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (
+      input:
+        | { kind: 'text'; content: string; termSep: string; cardSep: string }
+        | { kind: 'csv' | 'json'; file: File },
+    ) =>
+      input.kind === 'text'
+        ? api
+            .post<never, ApiResponse<ImportSummary>>(`/api/decks/${deckId}/import/text`, {
+              content: input.content,
+              termSep: input.termSep,
+              cardSep: input.cardSep,
+            })
+            .then((r) => r.data)
+        : postImportFile(deckId, input.kind, input.file),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['decks'] })
     },
     onError: (err: Error) => toast.error(err.message),
   })

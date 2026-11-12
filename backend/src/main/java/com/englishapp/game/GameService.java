@@ -1,25 +1,38 @@
 package com.englishapp.game;
 
 import com.englishapp.common.ApiException;
+import com.englishapp.flashcard.CardRepository;
+import com.englishapp.flashcard.CardService;
+import com.englishapp.flashcard.DeckService;
+import com.englishapp.flashcard.UserCard;
+import com.englishapp.flashcard.dto.CardResponse;
 import com.englishapp.game.dto.*;
-import com.englishapp.sm2.Sm2Card;
-import com.englishapp.sm2.Sm2CardRepository;
-import com.englishapp.sm2.Sm2Service;
-import com.englishapp.sm2.dto.ReviewResult;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
+import java.util.stream.Collectors;
 
+/**
+ * Mini-games ôn từ vựng trên deck FSRS của user.
+ * Kết quả game được ghi ngược vào lịch ôn FSRS: đúng → Good (3), sai → Again (1).
+ * Đáp án đúng luôn lấy từ DB — không tin dữ liệu client gửi lên.
+ */
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class GameService {
+
+    static final int RATING_CORRECT = 3;   // FSRS Good
+    static final int RATING_WRONG   = 1;   // FSRS Again
 
     private static final int MAX_QUESTIONS = 50;
     private static final int MC_OPTIONS    = 4;
 
-    private final Sm2CardRepository cardRepo;
-    private final Sm2Service        sm2Service;   // tái sử dụng SM-2, không copy
+    private final DeckService    deckService;
+    private final CardService    cardService;
+    private final CardRepository cardRepository;
 
     // ─────────────────────────────────────────────────────────────────────
     // 1. Multiple Choice
@@ -30,49 +43,38 @@ public class GameService {
      * Mỗi câu: front là từ hỏi, 4 options gồm 1 đáp án đúng + 3 nhiễu ngẫu nhiên
      * lấy từ back của card KHÁC trong cùng deck. Đáp án không lộ.
      */
-    public List<MultipleChoiceQuestion> generateMultipleChoice(UUID deckId, int count) {
-        List<Sm2Card> all = requireDeckCards(deckId, MC_OPTIONS);
-        int n = Math.min(count, Math.min(all.size(), MAX_QUESTIONS));
+    public List<MultipleChoiceQuestion> generateMultipleChoice(UUID deckId, int count, UUID userId) {
+        List<CardFace> all = requireDeckCards(deckId, userId, MC_OPTIONS);
+        List<CardFace> questions = pickRandom(all, count);
 
-        // Xáo trộn + lấy n câu
-        List<Sm2Card> questions = new ArrayList<>(all);
-        Collections.shuffle(questions);
-        questions = questions.subList(0, n);
-
-        // Tập distractors: tất cả back values trong deck
-        List<String> allBacks = all.stream().map(Sm2Card::getBack).toList();
+        // Tập distractors: mọi nghĩa khác nhau trong deck
+        List<String> allBacks = all.stream().map(CardFace::back).distinct().toList();
 
         List<MultipleChoiceQuestion> result = new ArrayList<>();
-        for (Sm2Card q : questions) {
+        for (CardFace q : questions) {
             List<String> distractors = allBacks.stream()
-                    .filter(b -> !b.equals(q.getBack()))
-                    .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
+                    .filter(b -> !b.equalsIgnoreCase(q.back()))
+                    .collect(Collectors.toCollection(ArrayList::new));
             Collections.shuffle(distractors);
 
             List<String> options = new ArrayList<>();
-            options.add(q.getBack());                               // correct
-            options.addAll(distractors.subList(0, MC_OPTIONS - 1)); // 3 distractors
+            options.add(q.back());                                                   // correct
+            options.addAll(distractors.subList(0, Math.min(MC_OPTIONS - 1, distractors.size())));
             Collections.shuffle(options);
 
-            result.add(new MultipleChoiceQuestion(q.getId(), q.getFront(), options));
+            result.add(new MultipleChoiceQuestion(q.cardId(), q.front(), options));
         }
         return result;
     }
 
-    /**
-     * Chấm câu trả lời multiple choice.
-     * Đáp án đúng lấy từ DB (không tin client).
-     * Map: correct → quality=4, wrong → quality=2, gọi SM-2.
-     */
-    public AnswerResult checkAnswer(UUID cardId, String selected) {
-        Sm2Card card = requireCard(cardId);
-        boolean correct = card.getBack().equalsIgnoreCase(selected.trim());
-        int quality = correct ? 4 : 2;
+    @Transactional
+    public AnswerResult checkAnswer(UUID cardId, String selected, UUID userId) {
+        UserCard card = cardService.requireOwnedCard(cardId, userId);
+        String expected = card.resolvedBack();
+        boolean correct = selected != null && expected.equalsIgnoreCase(selected.trim());
 
-        ReviewResult rev = sm2Service.review(cardId, quality);  // ← tái sử dụng
-        return new AnswerResult(correct, card.getBack(),
-                cardId, rev.repetitions(), rev.intervalDays(),
-                rev.easeFactor(), rev.dueDate());
+        CardResponse after = cardService.reviewCard(cardId, correct ? RATING_CORRECT : RATING_WRONG, userId);
+        return new AnswerResult(correct, expected, cardId, after.getState(), after.getNextReview());
     }
 
     // ─────────────────────────────────────────────────────────────────────
@@ -81,48 +83,41 @@ public class GameService {
 
     /**
      * Sinh game matching: 2 list xáo trộn riêng biệt.
-     * Terms có cardId để client gửi lại khi chấm.
-     * Definitions chỉ là chuỗi — không lộ mapping.
+     * Terms có cardId để client gửi lại khi chấm; definitions chỉ là chuỗi — không lộ mapping.
      */
-    public MatchingGame generateMatching(UUID deckId, int count) {
-        List<Sm2Card> all = requireDeckCards(deckId, 2);
-        int n = Math.min(count, Math.min(all.size(), MAX_QUESTIONS));
-
-        List<Sm2Card> cards = new ArrayList<>(all);
-        Collections.shuffle(cards);
-        cards = cards.subList(0, n);
+    public MatchingGame generateMatching(UUID deckId, int count, UUID userId) {
+        List<CardFace> cards = pickRandom(requireDeckCards(deckId, userId, 2), count);
 
         List<MatchingGame.Term> terms = cards.stream()
-                .map(c -> new MatchingGame.Term(c.getId(), c.getFront()))
-                .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
-
+                .map(c -> new MatchingGame.Term(c.cardId(), c.front()))
+                .collect(Collectors.toCollection(ArrayList::new));
         List<String> definitions = cards.stream()
-                .map(Sm2Card::getBack)
-                .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
+                .map(CardFace::back)
+                .collect(Collectors.toCollection(ArrayList::new));
 
-        // Xáo trộn 2 list độc lập
         Collections.shuffle(terms);
         Collections.shuffle(definitions);
-
         return new MatchingGame(terms, definitions);
     }
 
     /**
-     * Chấm matching: với mỗi (cardId, matchedBack), tra DB để biết đáp án đúng.
-     * Không cập nhật SM-2 ở đây — matching không map 1-1 sang quality rõ ràng.
+     * Chấm matching. Không cập nhật FSRS — một lần ghép không map rõ ràng sang một mức đánh giá.
      */
-    public MatchingCheckResult checkMatching(List<MatchingCheckRequest.Pair> pairs) {
+    public MatchingCheckResult checkMatching(List<MatchingCheckRequest.Pair> pairs, UUID userId) {
+        if (pairs == null || pairs.isEmpty()) {
+            return new MatchingCheckResult(0, 0, List.of());
+        }
         int correct = 0;
         List<MatchingCheckResult.Wrong> wrong = new ArrayList<>();
 
         for (MatchingCheckRequest.Pair p : pairs) {
-            Sm2Card card = requireCard(p.cardId());
-            if (card.getBack().equalsIgnoreCase(p.matchedBack().trim())) {
+            UserCard card = cardService.requireOwnedCard(p.cardId(), userId);
+            String expected = card.resolvedBack();
+            String answer = p.matchedBack() == null ? "" : p.matchedBack().trim();
+            if (expected.equalsIgnoreCase(answer)) {
                 correct++;
             } else {
-                wrong.add(new MatchingCheckResult.Wrong(
-                        card.getId(), card.getFront(),
-                        p.matchedBack(), card.getBack()));
+                wrong.add(new MatchingCheckResult.Wrong(card.getId(), card.resolvedFront(), answer, expected));
             }
         }
         return new MatchingCheckResult(correct, pairs.size(), wrong);
@@ -132,39 +127,28 @@ public class GameService {
     // 3. Typing Recall
     // ─────────────────────────────────────────────────────────────────────
 
-    /**
-     * Sinh câu hỏi typing: hiện back (nghĩa), user gõ front (từ).
-     */
-    public List<TypingQuestion> generateTyping(UUID deckId, int count) {
-        List<Sm2Card> all = requireDeckCards(deckId, 1);
-        int n = Math.min(count, Math.min(all.size(), MAX_QUESTIONS));
-
-        List<Sm2Card> cards = new ArrayList<>(all);
-        Collections.shuffle(cards);
-
-        return cards.subList(0, n).stream()
-                .map(c -> new TypingQuestion(c.getId(), c.getBack()))
+    /** Sinh câu hỏi typing: hiện back (nghĩa), user gõ front (từ). */
+    public List<TypingQuestion> generateTyping(UUID deckId, int count, UUID userId) {
+        return pickRandom(requireDeckCards(deckId, userId, 1), count).stream()
+                .map(c -> new TypingQuestion(c.cardId(), c.back()))
                 .toList();
     }
 
     /**
-     * Chấm typing: so khớp case-insensitive + trim.
-     * Levenshtein distance ≤ 1 → tính là đúng (typo nhẹ).
-     * Cập nhật SM-2: correct → quality=4, wrong → quality=2.
+     * Chấm typing: so khớp không phân biệt hoa thường, Levenshtein ≤ 1 vẫn tính đúng (typo nhẹ).
      */
-    public TypingCheckResult checkTyping(UUID cardId, String typed) {
-        Sm2Card card = requireCard(cardId);
-        String expected = card.getFront().trim().toLowerCase();
-        String answer   = (typed == null ? "" : typed.trim().toLowerCase());
+    @Transactional
+    public TypingCheckResult checkTyping(UUID cardId, String typed, UUID userId) {
+        UserCard card = cardService.requireOwnedCard(cardId, userId);
+        String expectedRaw = card.resolvedFront();
+        String expected = expectedRaw.trim().toLowerCase();
+        String answer   = typed == null ? "" : typed.trim().toLowerCase();
 
         int dist = levenshtein(expected, answer);
         boolean correct = dist <= 1;
-        int quality = correct ? 4 : 2;
 
-        ReviewResult rev = sm2Service.review(cardId, quality);  // ← tái sử dụng
-        return new TypingCheckResult(correct, card.getFront(), dist,
-                cardId, rev.repetitions(), rev.intervalDays(),
-                rev.easeFactor(), rev.dueDate());
+        CardResponse after = cardService.reviewCard(cardId, correct ? RATING_CORRECT : RATING_WRONG, userId);
+        return new TypingCheckResult(correct, expectedRaw, dist, cardId, after.getState(), after.getNextReview());
     }
 
     // ─────────────────────────────────────────────────────────────────────
@@ -191,8 +175,15 @@ public class GameService {
     // Helpers
     // ─────────────────────────────────────────────────────────────────────
 
-    private List<Sm2Card> requireDeckCards(UUID deckId, int minCards) {
-        List<Sm2Card> cards = cardRepo.findByDeckId(deckId);
+    /** Nội dung đã resolve của 1 card — đọc trong transaction vì vocab là LAZY. */
+    private record CardFace(UUID cardId, String front, String back) {}
+
+    private List<CardFace> requireDeckCards(UUID deckId, UUID userId, int minCards) {
+        deckService.requireOwnedDeck(deckId, userId);
+        List<CardFace> cards = cardRepository.findAllInDeckWithVocab(deckId).stream()
+                .map(c -> new CardFace(c.getId(), c.resolvedFront(), c.resolvedBack()))
+                .filter(c -> c.front() != null && c.back() != null)
+                .toList();
         if (cards.size() < minCards) {
             throw ApiException.badRequest(
                     "Deck needs at least " + minCards + " card(s), has " + cards.size());
@@ -200,8 +191,10 @@ public class GameService {
         return cards;
     }
 
-    private Sm2Card requireCard(UUID cardId) {
-        return cardRepo.findById(cardId)
-                .orElseThrow(() -> ApiException.notFound("Card not found: " + cardId));
+    private static List<CardFace> pickRandom(List<CardFace> all, int count) {
+        int n = Math.max(1, Math.min(count, Math.min(all.size(), MAX_QUESTIONS)));
+        List<CardFace> shuffled = new ArrayList<>(all);
+        Collections.shuffle(shuffled);
+        return shuffled.subList(0, n);
     }
 }

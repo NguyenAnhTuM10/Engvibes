@@ -2,77 +2,78 @@ package com.englishapp.game;
 
 import com.englishapp.common.ApiResponse;
 import com.englishapp.game.dto.*;
+import com.englishapp.user.UserService;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.UUID;
 
+@Tag(name = "Vocabulary Games", description = "Multiple choice, matching and typing recall on a flashcard deck")
 @RestController
-@RequestMapping("/api/sm2/games")
+@RequestMapping("/api/games")
 @RequiredArgsConstructor
 public class GameController {
 
     private final GameService service;
+    private final UserService userService;
 
     // ── 1. Multiple Choice ───────────────────────────────────────────────
 
-    /** GET /api/sm2/games/multiple-choice?deck_id=&count=10 */
+    /** GET /api/games/multiple-choice?deckId=&count=10 */
     @GetMapping("/multiple-choice")
     public ApiResponse<List<MultipleChoiceQuestion>> multipleChoice(
-            @RequestParam UUID deck_id,
+            @RequestParam UUID deckId,
             @RequestParam(defaultValue = "10") int count) {
-        return ApiResponse.ok(service.generateMultipleChoice(deck_id, count));
+        return ApiResponse.ok(service.generateMultipleChoice(deckId, count, currentUserId()));
     }
 
     /**
-     * POST /api/sm2/games/answer
-     * { "cardId": "...", "selected": "nghĩa user chọn" }
-     * Chấm đúng/sai, cập nhật SM-2, trả kết quả.
+     * POST /api/games/multiple-choice/answer — { "cardId": "...", "selected": "nghĩa user chọn" }
+     * Chấm đúng/sai và cập nhật lịch ôn FSRS.
      */
-    @PostMapping("/answer")
+    @PostMapping("/multiple-choice/answer")
     public ApiResponse<AnswerResult> answer(@RequestBody AnswerRequest req) {
-        return ApiResponse.ok(service.checkAnswer(req.cardId(), req.selected()));
+        return ApiResponse.ok(service.checkAnswer(req.cardId(), req.selected(), currentUserId()));
     }
 
     // ── 2. Matching ──────────────────────────────────────────────────────
 
-    /** GET /api/sm2/games/matching?deck_id=&count=6 */
+    /** GET /api/games/matching?deckId=&count=6 */
     @GetMapping("/matching")
     public ApiResponse<MatchingGame> matching(
-            @RequestParam UUID deck_id,
+            @RequestParam UUID deckId,
             @RequestParam(defaultValue = "6") int count) {
-        return ApiResponse.ok(service.generateMatching(deck_id, count));
+        return ApiResponse.ok(service.generateMatching(deckId, count, currentUserId()));
     }
 
-    /**
-     * POST /api/sm2/games/matching/check
-     * { "pairs": [{"cardId":"...", "matchedBack":"..."}] }
-     */
+    /** POST /api/games/matching/check — { "pairs": [{"cardId":"...", "matchedBack":"..."}] } */
     @PostMapping("/matching/check")
-    public ApiResponse<MatchingCheckResult> checkMatching(
-            @RequestBody MatchingCheckRequest req) {
-        return ApiResponse.ok(service.checkMatching(req.pairs()));
+    public ApiResponse<MatchingCheckResult> checkMatching(@RequestBody MatchingCheckRequest req) {
+        return ApiResponse.ok(service.checkMatching(req.pairs(), currentUserId()));
     }
 
     // ── 3. Typing Recall ─────────────────────────────────────────────────
 
-    /** GET /api/sm2/games/typing?deck_id=&count=10 */
+    /** GET /api/games/typing?deckId=&count=10 */
     @GetMapping("/typing")
     public ApiResponse<List<TypingQuestion>> typing(
-            @RequestParam UUID deck_id,
+            @RequestParam UUID deckId,
             @RequestParam(defaultValue = "10") int count) {
-        return ApiResponse.ok(service.generateTyping(deck_id, count));
+        return ApiResponse.ok(service.generateTyping(deckId, count, currentUserId()));
     }
 
     /**
-     * POST /api/sm2/games/typing/check
-     * { "cardId": "...", "typed": "user input" }
-     * Levenshtein ≤ 1 → đúng. Cập nhật SM-2.
+     * POST /api/games/typing/check — { "cardId": "...", "typed": "user input" }
+     * Levenshtein ≤ 1 → đúng. Cập nhật lịch ôn FSRS.
      */
     @PostMapping("/typing/check")
-    public ApiResponse<TypingCheckResult> checkTyping(
-            @RequestBody TypingCheckRequest req) {
-        return ApiResponse.ok(service.checkTyping(req.cardId(), req.typed()));
+    public ApiResponse<TypingCheckResult> checkTyping(@RequestBody TypingCheckRequest req) {
+        return ApiResponse.ok(service.checkTyping(req.cardId(), req.typed(), currentUserId()));
+    }
+
+    private UUID currentUserId() {
+        return userService.getCurrentUser().getId();
     }
 }

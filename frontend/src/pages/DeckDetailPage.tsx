@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, BookOpen, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react'
+import { ArrowLeft, BookOpen, ChevronLeft, ChevronRight, Gamepad2, Play, Trash2 } from 'lucide-react'
 import PageHeader from '@/components/ui/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import ImportDialog from '@/features/flashcard/components/ImportDialog'
 import { useDecks, useDeckCards, useDeleteCard } from '@/features/flashcard/api'
 import type { Card as FlashCard } from '@/shared/types/api'
 
@@ -12,6 +13,12 @@ const STATE_COLORS: Record<string, string> = {
   LEARNING: 'bg-yellow-100 text-yellow-800',
   REVIEW: 'bg-green-100 text-green-800',
   RELEARNING: 'bg-red-100 text-red-800',
+}
+
+const CEFR_COLORS: Record<string, string> = {
+  A1: 'bg-green-100 text-green-800', A2: 'bg-green-200 text-green-900',
+  B1: 'bg-blue-100 text-blue-800', B2: 'bg-purple-100 text-purple-800',
+  C1: 'bg-orange-100 text-orange-800', C2: 'bg-red-100 text-red-800',
 }
 
 export default function DeckDetailPage() {
@@ -25,6 +32,9 @@ export default function DeckDetailPage() {
 
   if (!id) return null
 
+  const dueCount = deck?.dueCount ?? 0
+  const cardCount = deck?.cardCount ?? 0
+
   return (
     <div>
       <div className="flex items-center gap-2 mb-4">
@@ -36,11 +46,23 @@ export default function DeckDetailPage() {
 
       <PageHeader
         title={deck?.name ?? 'Deck'}
-        description={`${deck?.cardCount ?? 0} cards · ${deck?.dueCount ?? 0} due`}
+        description={`${cardCount} cards · ${dueCount} due`}
         action={
-          <Button onClick={() => navigate(`/decks/${id}/review`)} disabled={deck?.dueCount === 0}>
-            Review {(deck?.dueCount ?? 0) > 0 && `(${deck!.dueCount})`}
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <ImportDialog deckId={id} />
+            <Button
+              variant="outline"
+              className="gap-2"
+              disabled={cardCount === 0}
+              onClick={() => navigate(`/decks/${id}/games`)}
+            >
+              <Gamepad2 className="h-4 w-4" /> Games
+            </Button>
+            <Button className="gap-2" onClick={() => navigate(`/decks/${id}/review`)} disabled={dueCount === 0}>
+              <Play className="h-4 w-4" />
+              Review {dueCount > 0 && `(${dueCount})`}
+            </Button>
+          </div>
         }
       />
 
@@ -54,10 +76,13 @@ export default function DeckDetailPage() {
         <div className="flex flex-col items-center justify-center py-24 text-muted-foreground gap-3">
           <BookOpen className="h-12 w-12 opacity-30" />
           <p className="text-lg font-medium">No cards yet</p>
-          <p className="text-sm">Add some from videos or search vocabulary</p>
-          <Button variant="outline" onClick={() => navigate('/decks')}>
-            Search vocabulary
-          </Button>
+          <p className="text-sm">Import a word list, save words from videos, or search the dictionary</p>
+          <div className="flex gap-2">
+            <ImportDialog deckId={id} />
+            <Button variant="outline" onClick={() => navigate('/decks')}>
+              Search vocabulary
+            </Button>
+          </div>
         </div>
       ) : (
         <>
@@ -74,6 +99,7 @@ export default function DeckDetailPage() {
                 size="sm"
                 disabled={page === 0}
                 onClick={() => setPage((p) => p - 1)}
+                aria-label="Previous page"
               >
                 <ChevronLeft className="h-4 w-4" />
               </Button>
@@ -85,6 +111,7 @@ export default function DeckDetailPage() {
                 size="sm"
                 disabled={cardsPage.last}
                 onClick={() => setPage((p) => p + 1)}
+                aria-label="Next page"
               >
                 <ChevronRight className="h-4 w-4" />
               </Button>
@@ -98,34 +125,29 @@ export default function DeckDetailPage() {
 
 function CardItem({ card }: { card: FlashCard }) {
   const deleteCard = useDeleteCard()
-
-  const nextReview = card.nextReview
-    ? new Date(card.nextReview).toLocaleDateString()
-    : '—'
+  const nextReview = new Date(card.nextReview).toLocaleDateString()
 
   return (
     <Card>
       <CardContent className="py-3 px-4 flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap mb-0.5">
-            <span className="font-semibold">{card.vocab.word}</span>
-            {card.vocab.ipa && (
-              <span className="text-xs text-muted-foreground">{card.vocab.ipa}</span>
+            <span className="font-semibold">{card.front}</span>
+            {card.ipa && <span className="text-xs text-muted-foreground">{card.ipa}</span>}
+            {card.vocab ? (
+              <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${CEFR_COLORS[card.vocab.cefrLevel] ?? ''}`}>
+                {card.vocab.cefrLevel}
+              </span>
+            ) : (
+              <span className="text-xs px-1.5 py-0.5 rounded font-medium bg-muted text-muted-foreground">
+                Custom
+              </span>
             )}
-            <span
-              className={`text-xs px-1.5 py-0.5 rounded font-medium ${
-                { A1: 'bg-green-100 text-green-800', A2: 'bg-green-200 text-green-900',
-                  B1: 'bg-blue-100 text-blue-800', B2: 'bg-purple-100 text-purple-800',
-                  C1: 'bg-orange-100 text-orange-800', C2: 'bg-red-100 text-red-800' }[card.vocab.cefrLevel] ?? ''
-              }`}
-            >
-              {card.vocab.cefrLevel}
-            </span>
             <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${STATE_COLORS[card.state] ?? ''}`}>
               {card.state}
             </span>
           </div>
-          <p className="text-sm text-muted-foreground line-clamp-1">{card.vocab.definition}</p>
+          <p className="text-sm text-muted-foreground line-clamp-1">{card.back}</p>
           {card.contextSentence && (
             <p className="text-xs text-muted-foreground mt-0.5 italic line-clamp-1">
               "{card.contextSentence}"
@@ -138,11 +160,11 @@ function CardItem({ card }: { card: FlashCard }) {
           size="icon"
           className="shrink-0 text-muted-foreground hover:text-destructive"
           onClick={() => {
-            if (confirm(`Remove "${card.vocab.word}" from this deck?`)) {
+            if (confirm(`Remove "${card.front}" from this deck?`)) {
               deleteCard.mutate(card.id)
             }
           }}
-          aria-label={`Remove ${card.vocab.word}`}
+          aria-label={`Remove ${card.front}`}
         >
           <Trash2 className="h-4 w-4" />
         </Button>

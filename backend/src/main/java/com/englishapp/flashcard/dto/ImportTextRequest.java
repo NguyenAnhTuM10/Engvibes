@@ -1,4 +1,4 @@
-package com.englishapp.sm2.dto;
+package com.englishapp.flashcard.dto;
 
 /** Import từ paste text kiểu Quizlet. */
 public record ImportTextRequest(
