@@ -40,7 +40,8 @@ export default function CardReview({ card, onRate, isSubmitting }: CardReviewPro
     '4': () => flipped && handleRate(4),
   })
 
-  const { vocab, contextSentence } = card
+  const { front, back, ipa, vocab, contextSentence } = card
+  const cefr = vocab?.cefrLevel
 
   return (
     <div className="flex flex-col items-center gap-6 w-full max-w-xl mx-auto">
@@ -61,15 +62,15 @@ export default function CardReview({ card, onRate, isSubmitting }: CardReviewPro
         >
           {/* Front */}
           <div className="backface-hidden absolute inset-0 flex flex-col items-center justify-center rounded-xl border-2 border-border bg-card shadow-lg p-8">
-            <p className="text-4xl font-bold text-foreground mb-3">{vocab.word}</p>
-            {vocab.ipa && (
-              <p className="text-lg text-muted-foreground mb-3">{vocab.ipa}</p>
+            <p className="text-4xl font-bold text-foreground mb-3">{front}</p>
+            {ipa && (
+              <p className="text-lg text-muted-foreground mb-3">{ipa}</p>
             )}
-            <span
-              className={`text-xs px-2 py-0.5 rounded-full font-semibold ${CEFR_COLORS[vocab.cefrLevel] ?? ''}`}
-            >
-              {vocab.cefrLevel}
-            </span>
+            {cefr && (
+              <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${CEFR_COLORS[cefr] ?? ''}`}>
+                {cefr}
+              </span>
+            )}
             <p className="text-sm text-muted-foreground mt-6">Press Space or click to reveal</p>
           </div>
 
@@ -77,18 +78,20 @@ export default function CardReview({ card, onRate, isSubmitting }: CardReviewPro
           <div className="backface-hidden rotate-y-180 absolute inset-0 flex flex-col items-start justify-center rounded-xl border-2 border-primary bg-card shadow-lg p-8 overflow-y-auto">
             <div className="w-full">
               <div className="flex items-baseline gap-3 flex-wrap mb-1">
-                <p className="text-2xl font-bold">{vocab.word}</p>
-                {vocab.ipa && (
-                  <p className="text-sm text-muted-foreground">{vocab.ipa}</p>
+                <p className="text-2xl font-bold">{front}</p>
+                {ipa && (
+                  <p className="text-sm text-muted-foreground">{ipa}</p>
                 )}
-                <Badge variant="outline" className="text-xs">{vocab.partOfSpeech}</Badge>
+                {vocab?.partOfSpeech && (
+                  <Badge variant="outline" className="text-xs">{vocab.partOfSpeech}</Badge>
+                )}
               </div>
-              <span
-                className={`text-xs px-2 py-0.5 rounded-full font-semibold ${CEFR_COLORS[vocab.cefrLevel] ?? ''}`}
-              >
-                {vocab.cefrLevel}
-              </span>
-              <p className="mt-4 text-base text-foreground leading-relaxed">{vocab.definition}</p>
+              {cefr && (
+                <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${CEFR_COLORS[cefr] ?? ''}`}>
+                  {cefr}
+                </span>
+              )}
+              <p className="mt-4 text-base text-foreground leading-relaxed">{back}</p>
               {contextSentence && (
                 <p className="mt-3 text-sm text-muted-foreground italic border-l-2 border-border pl-3">
                   "{contextSentence}"

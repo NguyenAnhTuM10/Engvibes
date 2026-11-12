@@ -1,4 +1,4 @@
-import { createBrowserRouter } from 'react-router-dom'
+import { createBrowserRouter, Navigate } from 'react-router-dom'
 import { lazy, Suspense } from 'react'
 import AuthGuard from '@/components/AuthGuard'
 import AppLayout from '@/components/layout/AppLayout'
@@ -19,10 +19,7 @@ const VideoWatchPage = lazy(() => import('@/pages/VideoWatchPage'))
 const SpeakPracticePage = lazy(() => import('@/pages/SpeakPracticePage'))
 const ConversationPage = lazy(() => import('@/pages/ConversationPage'))
 const PronunciationPage = lazy(() => import('@/pages/PronunciationPage'))
-const VocabPage       = lazy(() => import('@/pages/VocabPage'))
-const VocabDeckPage   = lazy(() => import('@/pages/VocabDeckPage'))
-const VocabReviewPage = lazy(() => import('@/pages/VocabReviewPage'))
-const VocabGamesPage  = lazy(() => import('@/pages/VocabGamesPage'))
+const DeckGamesPage = lazy(() => import('@/pages/DeckGamesPage'))
 
 function PageLoader() {
   return (
@@ -66,16 +63,15 @@ const router = createBrowserRouter([
       { path: 'decks', element: <Wrap><DecksPage /></Wrap> },
       { path: 'decks/:id', element: <Wrap><DeckDetailPage /></Wrap> },
       { path: 'decks/:id/review', element: <Wrap><ReviewPage /></Wrap> },
+      { path: 'decks/:id/games', element: <Wrap><DeckGamesPage /></Wrap> },
       { path: 'progress', element: <Wrap><ProgressPage /></Wrap> },
       { path: 'history', element: <Wrap><HistoryPage /></Wrap> },
       { path: 'profile', element: <Wrap><ProfilePage /></Wrap> },
       { path: 'speak', element: <Wrap><SpeakPracticePage /></Wrap> },
       { path: 'conversation', element: <Wrap><ConversationPage /></Wrap> },
       { path: 'pronunciation', element: <Wrap><PronunciationPage /></Wrap> },
-      { path: 'vocab', element: <Wrap><VocabPage /></Wrap> },
-      { path: 'vocab/:id', element: <Wrap><VocabDeckPage /></Wrap> },
-      { path: 'vocab/:id/review', element: <Wrap><VocabReviewPage /></Wrap> },
-      { path: 'vocab/:id/games',  element: <Wrap><VocabGamesPage /></Wrap> },
+      // Old SM-2 vocabulary routes — merged into /decks
+      { path: 'vocab/*', element: <Navigate to="/decks" replace /> },
       {
         path: 'admin/videos',
         element: (

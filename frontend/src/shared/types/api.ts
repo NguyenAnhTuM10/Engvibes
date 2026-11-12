@@ -64,11 +64,21 @@ export interface Deck {
 }
 
 export type CardState = 'NEW' | 'LEARNING' | 'REVIEW' | 'RELEARNING'
-export type CardSource = 'MANUAL' | 'WARMUP' | 'LISTEN' | 'QUICK_REVIEW'
+export type CardSource = 'WARMUP' | 'LISTEN' | 'RETELL' | 'SPEAK' | 'MANUAL' | 'IMPORT'
 
+/**
+ * A flashcard scheduled with FSRS. Two kinds:
+ * - dictionary card: `vocab` is set, `custom` = false
+ * - custom card (imported / added from a transcript): `vocab` is null, `custom` = true
+ * `front` / `back` / `ipa` are always resolved by the backend, so UI code can ignore the kind.
+ */
 export interface Card {
   id: string
-  vocab: Vocab
+  front: string
+  back: string
+  ipa: string | null
+  custom: boolean
+  vocab: Vocab | null
   deckId: string
   state: CardState
   stability: number
@@ -80,6 +90,12 @@ export interface Card {
   contextSentence: string | null
   sourceVideoId: string | null
   sourceType: CardSource | null
+}
+
+export interface ImportSummary {
+  imported: number
+  skipped: number
+  errors: { line: number; reason: string }[]
 }
 
 // ── Video ────────────────────────────────────────────────────────────────────

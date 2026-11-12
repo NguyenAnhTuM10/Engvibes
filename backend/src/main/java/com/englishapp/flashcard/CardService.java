@@ -27,60 +27,87 @@ public class CardService {
     private final FsrsScheduler fsrsScheduler;
     private final FlashcardMapper flashcardMapper;
 
+    /**
+     * Thêm card vào deck (mặc định: deck default của user). Idempotent — nếu card đã
+     * có trong deck thì trả card cũ thay vì tạo bản trùng.
+     */
     public CardResponse addCard(CreateCardRequest request, UUID userId) {
-        VocabEntry vocab = vocabRepository.findById(request.getVocabId())
-                .orElseThrow(() -> ApiException.notFound("Vocab not found"));
-
         UUID deckId = request.getDeckId() != null
-                ? request.getDeckId()
+                ? deckService.requireOwnedDeck(request.getDeckId(), userId).getId()
                 : deckService.getOrCreateDefaultDeck(userId).getId();
 
-        // Idempotent — return existing if already added
+        UserCard card = request.getVocabId() != null
+                ? addVocabCard(request, deckId, userId)
+                : addCustomCard(request, deckId, userId);
+        return flashcardMapper.toCardResponse(card);
+    }
+
+    private UserCard addVocabCard(CreateCardRequest request, UUID deckId, UUID userId) {
+        VocabEntry vocab = vocabRepository.findById(request.getVocabId())
+                .orElseThrow(() -> ApiException.notFound("Vocab not found"));
         return cardRepository.findByUserIdAndVocab_IdAndDeckId(userId, vocab.getId(), deckId)
-                .map(flashcardMapper::toCardResponse)
-                .orElseGet(() -> {
-                    UserCard card = UserCard.builder()
-                            .userId(userId)
-                            .vocab(vocab)
-                            .deckId(deckId)
-                            .contextSentence(request.getContextSentence())
-                            .sourceVideoId(request.getSourceVideoId())
-                            .sourceSegmentId(request.getSourceSegmentId())
-                            .sourceType(request.getSourceType())
-                            .build();
-                    return flashcardMapper.toCardResponse(cardRepository.save(card));
-                });
+                .orElseGet(() -> cardRepository.save(baseCard(request, deckId, userId)
+                        .vocab(vocab)
+                        .build()));
+    }
+
+    private UserCard addCustomCard(CreateCardRequest request, UUID deckId, UUID userId) {
+        String front = request.getFront().trim();
+        return cardRepository.findFirstByDeckIdAndVocabIsNullAndFrontIgnoreCase(deckId, front)
+                .orElseGet(() -> cardRepository.save(baseCard(request, deckId, userId)
+                        .front(front)
+                        .back(request.getBack().trim())
+                        .ipa(blankToNull(request.getIpa()))
+                        .build()));
+    }
+
+    private UserCard.UserCardBuilder baseCard(CreateCardRequest request, UUID deckId, UUID userId) {
+        return UserCard.builder()
+                .userId(userId)
+                .deckId(deckId)
+                .contextSentence(blankToNull(request.getContextSentence()))
+                .sourceVideoId(request.getSourceVideoId())
+                .sourceSegmentId(request.getSourceSegmentId())
+                .sourceType(request.getSourceType() != null ? request.getSourceType() : CardSource.MANUAL);
     }
 
     @Transactional(readOnly = true)
     public Page<CardResponse> getCardsInDeck(UUID deckId, Pageable pageable, UUID userId) {
+        deckService.requireOwnedDeck(deckId, userId);
         return cardRepository.findByDeckId(deckId, pageable)
                 .map(flashcardMapper::toCardResponse);
     }
 
     @Transactional(readOnly = true)
-    public List<CardResponse> getDueCards(UUID deckId, int limit) {
-        return cardRepository.findByDeckIdAndNextReviewBefore(deckId, Instant.now(), PageRequest.of(0, limit))
+    public List<CardResponse> getDueCards(UUID deckId, int limit, UUID userId) {
+        deckService.requireOwnedDeck(deckId, userId);
+        int safeLimit = Math.max(1, Math.min(limit, 100));
+        return cardRepository.findDueInDeck(deckId, Instant.now(), PageRequest.of(0, safeLimit)).stream()
                 .map(flashcardMapper::toCardResponse)
                 .toList();
     }
 
+    /** Chấm một lần ôn bằng FSRS. rating: 1=Again, 2=Hard, 3=Good, 4=Easy. */
     public CardResponse reviewCard(UUID cardId, int rating, UUID userId) {
-        UserCard card = cardRepository.findById(cardId)
-                .orElseThrow(() -> ApiException.notFound("Card not found"));
-        if (!card.getUserId().equals(userId)) {
-            throw ApiException.forbidden("Access denied");
-        }
+        UserCard card = requireOwnedCard(cardId, userId);
         fsrsScheduler.review(card, rating);
         return flashcardMapper.toCardResponse(cardRepository.save(card));
     }
 
     public void deleteCard(UUID cardId, UUID userId) {
+        cardRepository.delete(requireOwnedCard(cardId, userId));
+    }
+
+    public UserCard requireOwnedCard(UUID cardId, UUID userId) {
         UserCard card = cardRepository.findById(cardId)
                 .orElseThrow(() -> ApiException.notFound("Card not found"));
         if (!card.getUserId().equals(userId)) {
             throw ApiException.forbidden("Access denied");
         }
-        cardRepository.delete(card);
+        return card;
+    }
+
+    private static String blankToNull(String s) {
+        return (s == null || s.isBlank()) ? null : s.trim();
     }
 }

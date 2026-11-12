@@ -17,6 +17,13 @@ import java.util.UUID;
 @AllArgsConstructor
 public class CardResponse {
     private UUID id;
+    /** Mặt trước / mặt sau / IPA đã được resolve — FE không cần phân biệt loại card. */
+    private String front;
+    private String back;
+    private String ipa;
+    /** true = card tự tạo (không gắn từ điển, {@code vocab} = null). */
+    private boolean custom;
+    /** Null với card tự tạo. */
     private VocabResponse vocab;
     private UUID deckId;
     private CardState state;

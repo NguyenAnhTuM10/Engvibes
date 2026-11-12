@@ -178,6 +178,7 @@ public class DemoSeedRunner implements CommandLineRunner {
         List<Video> videos = createVideos();
         FlashcardDeck deck = createDeck(demoUser);
         createCards(demoUser, deck, videos);
+        createCustomDeck(demoUser);
         createSessions(demoUser, videos);
         createInteractions(demoUser, videos);
         createEvents(demoUser, videos);
@@ -307,6 +308,48 @@ public class DemoSeedRunner implements CommandLineRunner {
         }
         cardRepository.saveAll(cards);
         log.info("[DemoSeed] Created {} cards", cards.size());
+    }
+
+    /** Deck card tự tạo (front/back tiếng Việt) để demo import + games. Đến hạn ôn ngay. */
+    private void createCustomDeck(User user) {
+        FlashcardDeck deck = deckRepository.save(FlashcardDeck.builder()
+                .userId(user.getId())
+                .name("Daily English")
+                .color("#10B981")
+                .build());
+
+        String[][] words = {
+            {"achieve",     "đạt được, hoàn thành",       "əˈtʃiːv",       "She worked hard to achieve her goals."},
+            {"significant", "đáng kể, quan trọng",        "sɪɡˈnɪfɪkənt",  "There was a significant improvement in his performance."},
+            {"therefore",   "do đó, vì vậy",              "ˈðɛrfɔː",       "He was ill, therefore he stayed home."},
+            {"consequence", "hậu quả, kết quả",           "ˈkɒnsɪkwəns",   "Every action has consequences."},
+            {"perspective", "quan điểm, góc nhìn",        "pəˈspɛktɪv",    "Try to see things from a different perspective."},
+            {"opportunity", "cơ hội",                     "ˌɒpəˈtjuːnɪti", "This is a great opportunity to learn."},
+            {"challenge",   "thách thức",                 "ˈtʃælɪndʒ",     "Learning a new language is a challenge."},
+            {"evidence",    "bằng chứng",                 "ˈɛvɪdəns",      "There is no evidence to support this claim."},
+            {"essential",   "thiết yếu, cần thiết",       "ɪˈsɛnʃəl",      "Water is essential for life."},
+            {"approach",    "phương pháp, cách tiếp cận", "əˈprəʊtʃ",      "We need a new approach to solve this problem."},
+            {"recommend",   "giới thiệu, đề xuất",        "ˌrɛkəˈmɛnd",    "I highly recommend this book."},
+            {"assume",      "giả định, cho là",           "əˈsjuːm",       "Never assume you know everything."},
+            {"benefit",     "lợi ích",                    "ˈbɛnɪfɪt",      "Exercise has many health benefits."},
+            {"establish",   "thành lập, xác lập",         "ɪˈstæblɪʃ",     "The company was established in 1990."},
+            {"indicate",    "chỉ ra, cho thấy",           "ˈɪndɪkeɪt",     "The data indicate a clear trend."},
+        };
+
+        List<UserCard> cards = new ArrayList<>();
+        for (String[] w : words) {
+            cards.add(UserCard.builder()
+                    .userId(user.getId())
+                    .deckId(deck.getId())
+                    .front(w[0])
+                    .back(w[1])
+                    .ipa(w[2])
+                    .contextSentence(w[3])
+                    .sourceType(CardSource.IMPORT)
+                    .build());
+        }
+        cardRepository.saveAll(cards);
+        log.info("[DemoSeed] Created custom deck '{}' with {} cards", deck.getName(), cards.size());
     }
 
     private void createSessions(User user, List<Video> videos) {

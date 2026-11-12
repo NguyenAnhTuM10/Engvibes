@@ -4,14 +4,14 @@ import {
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, BookmarkPlus, Volume2, VolumeX,
-  RotateCcw, ChevronRight, ChevronLeft, CheckCircle2, Mic, GraduationCap,
+  RotateCcw, ChevronRight, ChevronLeft, CheckCircle2, Mic,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import CefrBadge from '@/components/ui/CefrBadge'
 import { useVideo, useVideoSubtitles } from '@/features/videos/api'
-import { useCreateOrGetSession, useVocabInfo, useAddVocabFromListen } from '@/features/session/api'
-import { useVocabDecks, useCreateVocabCard } from '@/features/vocab/sm2api'
+import { useCreateOrGetSession, useVocabInfo } from '@/features/session/api'
+import { useAddCard, useDecks, type AddCardInput } from '@/features/flashcard/api'
 import type { SubtitleSegment, Vocab, WarmupWord } from '@/shared/types/api'
 import { toast } from 'sonner'
 
@@ -400,7 +400,7 @@ function SegmentText({
 // ── Vocab popover ─────────────────────────────────────────────────────────────
 
 function VocabCard({
-  word, sentence, warmupWord, vocab, isLoading, position, onSave, onClose, isSaving,
+  word, sentence, warmupWord, vocab, isLoading, position, videoId, onClose,
 }: {
   word: string
   sentence: string
@@ -408,22 +408,19 @@ function VocabCard({
   vocab: Vocab | undefined
   isLoading: boolean
   position: { x: number; y: number }
-  onSave: (vocabId: string) => void
+  videoId: string
   onClose: () => void
-  isSaving: boolean
 }) {
   const def = vocab?.definition ?? warmupWord?.definition
   const ipa = vocab?.ipa ?? warmupWord?.ipa
   const pos = vocab?.partOfSpeech ?? warmupWord?.partOfSpeech
 
-  // SM-2 deck add
-  const { data: decks } = useVocabDecks()
-  const createCard = useCreateVocabCard()
-  const [deckId, setDeckId] = useState<string>('')
-
-  useEffect(() => {
-    if (!deckId && decks?.length) setDeckId(decks[0].id)
-  }, [decks, deckId])
+  // Add to a flashcard deck: dictionary card when the word is in the dictionary,
+  // otherwise a custom card built from the quick definition.
+  const { data: decks = [] } = useDecks()
+  const addCard = useAddCard()
+  const [pickedDeckId, setDeckId] = useState<string>('')
+  const deckId = pickedDeckId || (decks.find((d) => d.isDefault) ?? decks[0])?.id || ''
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -438,18 +435,26 @@ function VocabCard({
       Object.assign(new SpeechSynthesisUtterance(word), { lang: 'en-US', rate: 0.85 }),
     )
 
+  const canAdd = !!vocab?.id || !!def
+
   const handleAddToDeck = () => {
-    if (!deckId || !def) return
-    createCard.mutate(
-      { deckId, front: word, back: def, ipa: ipa || undefined, exampleSentence: sentence || undefined },
-      {
-        onSuccess: () => {
-          toast.success(`Added "${word}" to ${decks?.find((d) => d.id === deckId)?.name ?? 'deck'}`)
-          onClose()
-        },
-        onError: () => toast.error('Could not add to deck'),
+    if (!canAdd) return
+    const common = {
+      // No deck yet → backend adds to (and creates) the user's default deck
+      deckId: deckId || undefined,
+      contextSentence: sentence || undefined,
+      sourceVideoId: videoId,
+      sourceType: 'LISTEN' as const,
+    }
+    const input: AddCardInput = vocab?.id
+      ? { ...common, vocabId: vocab.id }
+      : { ...common, front: word, back: def!, ipa: ipa || undefined }
+    addCard.mutate(input, {
+      onSuccess: () => {
+        toast.success(`Added "${word}" to ${decks.find((d) => d.id === deckId)?.name ?? 'your deck'}`)
+        onClose()
       },
-    )
+    })
   }
 
   return (
@@ -484,39 +489,26 @@ function VocabCard({
         <p className="text-xs text-muted-foreground italic">No definition found</p>
       ) : null}
 
-      {/* Thêm vào SM-2 deck */}
-      {def && (
+      {/* Thêm vào deck flashcard (FSRS) */}
+      {canAdd && (
         <div className="space-y-1.5 pt-1 border-t">
-          {decks && decks.length > 0 ? (
-            <>
-              <select
-                value={deckId}
-                onChange={(e) => setDeckId(e.target.value)}
-                className="w-full text-xs rounded-md border bg-background px-2 py-1.5"
-              >
-                {decks.map((d) => (
-                  <option key={d.id} value={d.id}>{d.name}</option>
-                ))}
-              </select>
-              <Button size="sm" className="w-full gap-1.5"
-                onClick={handleAddToDeck} disabled={createCard.isPending || !deckId}>
-                <GraduationCap className="h-3.5 w-3.5" />
-                {createCard.isPending ? 'Adding…' : 'Add to Vocab Deck'}
-              </Button>
-            </>
-          ) : (
-            <p className="text-xs text-muted-foreground italic">No vocab deck yet — create one in Vocabulary.</p>
+          {decks.length > 1 && (
+            <select
+              value={deckId}
+              onChange={(e) => setDeckId(e.target.value)}
+              aria-label="Deck"
+              className="w-full text-xs rounded-md border bg-background px-2 py-1.5"
+            >
+              {decks.map((d) => (
+                <option key={d.id} value={d.id}>{d.name}</option>
+              ))}
+            </select>
           )}
+          <Button size="sm" className="w-full gap-1.5" onClick={handleAddToDeck} disabled={addCard.isPending}>
+            <BookmarkPlus className="h-3.5 w-3.5" />
+            {addCard.isPending ? 'Adding…' : 'Add to deck'}
+          </Button>
         </div>
-      )}
-
-      {/* Lưu vào flashcard (FSRS) — giữ chức năng cũ */}
-      {vocab?.id && (
-        <Button size="sm" variant="outline" className="w-full gap-1.5"
-          onClick={() => onSave(vocab.id)} disabled={isSaving}>
-          <BookmarkPlus className="h-3.5 w-3.5" />
-          {isSaving ? 'Saving…' : 'Save to Flashcards'}
-        </Button>
       )}
     </div>
   )
@@ -544,9 +536,8 @@ export default function VideoWatchPage() {
   const [sessionId, setSessionId] = useState<string | null>(null)
   const createSession = useCreateOrGetSession()
   const { data: vocabInfo, isLoading: vocabLoading } = useVocabInfo(sessionId ?? '', selectedWord)
-  const addVocab = useAddVocabFromListen(sessionId ?? '')
 
-  // Create session eagerly for vocab saving
+  // Create session eagerly — needed for the word lookup in the vocab popover
   useEffect(() => {
     if (!videoId) return
     createSession.mutateAsync(videoId).then((s) => setSessionId(s.id)).catch(() => {})
@@ -587,17 +578,6 @@ export default function VideoWatchPage() {
       videoRef.current.play().catch(() => {})
     }
   }, [])
-
-  const handleSaveVocab = useCallback((vocabId: string) => {
-    if (!sessionId) { toast.error('Session not ready, try again.'); return }
-    addVocab.mutate({ vocabId }, {
-      onSuccess: () => {
-        setSelectedWord(null)
-        setPopoverPos(null)
-        toast.success('Saved to flashcards!')
-      },
-    })
-  }, [sessionId, addVocab])
 
   const warmupWord = useMemo(
     () => video?.warmupWords?.find((w) => w.word.toLowerCase() === selectedWord),
@@ -769,9 +749,8 @@ export default function VideoWatchPage() {
           vocab={vocabInfo}
           isLoading={vocabLoading}
           position={popoverPos}
-          onSave={handleSaveVocab}
+          videoId={videoId!}
           onClose={() => { setSelectedWord(null); setPopoverPos(null) }}
-          isSaving={addVocab.isPending}
         />
       )}
     </div>

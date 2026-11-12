@@ -149,17 +149,18 @@ curl -X POST http://localhost:8000/analyze -H "Content-Type: application/json" `
 ```powershell
 # Build (skip tests)
 cd backend
-.\gradlew.bat build -x test
+.\mvnw.cmd package -DskipTests
 
 # Run — LUÔN dùng profile local
-java -jar build\libs\backend-0.0.1-SNAPSHOT.jar --spring.profiles.active=local
+java -jar target\backend-0.0.1-SNAPSHOT.jar --spring.profiles.active=local
+# hoặc: .\mvnw.cmd spring-boot:run "-Dspring-boot.run.profiles=local"
 
 # Chạy từ root Engvibes/ (dotenv không cần)
-# Run tests
-.\gradlew.bat test
+# Run tests (unit + Testcontainers integration — cần Docker đang chạy)
+.\mvnw.cmd test
 
 # Run single test class
-.\gradlew.bat test --tests "com.englishapp.user.UserControllerTest"
+.\mvnw.cmd test "-Dtest=CardServiceTest"
 ```
 
 ### Frontend
@@ -194,14 +195,14 @@ D:\AAA\Engvibes\
 │   ├── main.py               ← /analyze endpoint + phoneme alignment + tips dict
 │   ├── requirements.txt      ← fastapi, uvicorn, eng-to-ipa, pydantic
 │   └── Dockerfile
-├── backend/                  ← Spring Boot 3.3 / Java 21 / Gradle Groovy
-│   ├── build.gradle
+├── backend/                  ← Spring Boot 3.3 / Java 21 / Maven (mvnw)
+│   ├── pom.xml
 │   └── src/main/
 │       ├── java/com/englishapp/
 │       └── resources/
 │           ├── application.yml           ← env-driven config (incl. pronunciation-service.url)
 │           ├── application-local.yml     ← dev credentials (gitignored)
-│           └── db/migration/             ← Flyway V1__–V19__
+│           └── db/migration/             ← Flyway V1__–V21__
 └── frontend/                 ← React 18 + Vite 5 + TypeScript strict
     └── src/
         ├── app/              ← App.tsx, providers.tsx (QueryClient+Router), router.tsx
@@ -220,6 +221,12 @@ com.englishapp/
 ├── vocab/      VocabEntry, VocabRepository, VocabMapper, VocabSeeder (loads seed/oxford_5000.csv on startup)
 ├── flashcard/  FlashcardDeck, UserCard, DeckRepository, CardRepository, FsrsScheduler (FSRS-4.5)
 │               DeckService, CardService, DeckController (/api/decks), CardController (/api/cards)
+│               CardImportService (import text/CSV/JSON → /api/decks/{id}/import/*)
+│               UserCard có 2 loại: card từ điển (vocab != null) và card tự tạo (vocab = null,
+│               dùng front/back/ipa). Đọc nội dung qua resolvedFront()/resolvedBack()/resolvedIpa().
+│               CHỈ CÓ MỘT hệ SRS (FSRS) — module SM-2 cũ đã gộp vào đây ở V21, KHÔNG tạo lại.
+├── game/       GameService + GameController (/api/games): multiple choice, matching, typing recall
+│               trên deck FSRS; đúng → rating 3 (Good), sai → rating 1 (Again)
 ├── video/      Video, VideoStatus, VideoRepository, VideoService (upload+process+CRUD)
 │               FfmpegService (getDuration/extractAudio/extractThumbnail via ProcessBuilder)
 │               AdminVideoController (/api/admin/videos — ADMIN, @PreAuthorize)
@@ -348,7 +355,7 @@ VITE_WS_URL=ws://localhost:8080/ws
 3. **Vocab deck integration**: load từ deck flashcard của user thay vì hardcode word groups trong PronunciationPage
 
 ### Demo profile
-- Chạy: `java -jar backend/build/libs/backend-0.0.1-SNAPSHOT.jar --spring.profiles.active=local,demo`
+- Chạy: `java -jar backend/target/backend-0.0.1-SNAPSHOT.jar --spring.profiles.active=local,demo`
 - Login demo: `demo@englishapp.com / demo123`
 - Login admin: `admin1@englishapp.com / admin123`
 - Seed: 40 videos, 13 users, 25 sessions, 100 cards, phoneme stats, 50 events
@@ -403,8 +410,11 @@ public Result processWithExternalService(UUID id) {
 | PATCH/DELETE | `/api/decks/{id}` | JWT | Sửa/xóa deck |
 | GET | `/api/decks/{id}/cards` | JWT | Cards trong deck |
 | GET | `/api/decks/{id}/cards/due` | JWT | Cards đến hạn |
-| POST | `/api/cards` | JWT | Thêm card |
+| POST | `/api/cards` | JWT | Thêm card từ điển (`vocabId`) hoặc card tự tạo (`front` + `back`) |
 | POST | `/api/cards/{id}/review` | JWT | Review FSRS |
+| POST | `/api/decks/{id}/import/text\|csv\|json` | JWT | Import card tự tạo hàng loạt (tối đa 1000) |
+| GET | `/api/games/multiple-choice\|matching\|typing?deckId=` | JWT | Sinh game từ deck |
+| POST | `/api/games/multiple-choice/answer`, `/matching/check`, `/typing/check` | JWT | Chấm game (MC + typing cập nhật FSRS) |
 | DELETE | `/api/cards/{id}` | JWT | Xóa card |
 | GET | `/api/videos` | JWT | List PUBLISHED videos |
 | GET | `/api/videos/{id}` | JWT | Video detail + view++ |

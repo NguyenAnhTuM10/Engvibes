@@ -41,17 +41,17 @@ export default function QuickReviewMode({ cards, onDone }: QuickReviewModeProps)
             >
               {!isFlipped ? (
                 <div className="flex flex-col items-center justify-center h-full p-4 text-center">
-                  <p className="font-bold text-base">{card.vocab.word}</p>
-                  {card.vocab.ipa && (
-                    <p className="text-xs text-muted-foreground mt-1">{card.vocab.ipa}</p>
+                  <p className="font-bold text-base">{card.front}</p>
+                  {card.ipa && (
+                    <p className="text-xs text-muted-foreground mt-1">{card.ipa}</p>
                   )}
                   <p className="text-[11px] text-muted-foreground mt-3">tap to reveal</p>
                 </div>
               ) : (
                 <div className="flex flex-col p-3 h-full">
-                  <p className="font-semibold text-sm mb-1">{card.vocab.word}</p>
+                  <p className="font-semibold text-sm mb-1">{card.front}</p>
                   <p className="text-xs text-muted-foreground flex-1 line-clamp-3">
-                    {card.vocab.definition}
+                    {card.back}
                   </p>
                   <div className="flex gap-1 mt-2">
                     <Button
